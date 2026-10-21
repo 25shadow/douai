@@ -1,16 +1,20 @@
 {
-  "name": "dycast",
+  "name": "douai",
   "version": "1.1.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "run-p dev:web dev:api",
+    "dev:web": "vite",
+    "dev:api": "python config_server.py",
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "build-only": "vite build",
-    "type-check": "vue-tsc --build"
+    "type-check": "vue-tsc --build",
+    "test": "node --disable-warning=ExperimentalWarning --experimental-strip-types --experimental-transform-types --test src/game/quiz/__tests__/*.test.ts src/voice/__tests__/*.test.ts"
   },
   "dependencies": {
+    "@lucide/vue": "^1.61.0",
     "@types/vue-virtual-scroller": "npm:@earltp/vue-virtual-scroller@^1.0.1",
     "pako": "^2.1.0",
     "sass": "^1.87.0",

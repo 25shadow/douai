@@ -13,6 +13,8 @@ dist
 dist-ssr
 coverage
 *.local
+douai.sqlite3
+__pycache__/
 
 /cypress/videos/
 /cypress/screenshots/
@@ -30,3 +32,5 @@ coverage
 *.tsbuildinfo
 
 test/
+.playwright-cli/
+output/

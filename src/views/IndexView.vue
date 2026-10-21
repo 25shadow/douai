@@ -284,7 +284,7 @@ const connectLive = function () {
     SkMessage.info(`正在连接：${roomNum.value}`);
     const cast = new DyCast(roomNum.value);
     cast.on('open', (ev, info) => {
-      CLog.info('DyCast 房间连接成功');
+      CLog.info('直播间连接成功');
       SkMessage.success(`房间连接成功[${roomNum.value}]`);
       setRoomInputStatus(true);
       connectStatus.value = 1;
@@ -292,13 +292,13 @@ const connectLive = function () {
       addConsoleMessage('直播间已连接');
     });
     cast.on('error', err => {
-      CLog.error('DyCast 连接出错 =>', err);
+      CLog.error('直播连接出错 =>', err);
       SkMessage.error(`连接出错: ${err}`);
       connectStatus.value = 2;
       setRoomInputStatus(false);
     });
     cast.on('close', (code, reason) => {
-      CLog.info(`DyCast 房间已关闭[${code}] => ${reason}`);
+      CLog.info(`直播间已关闭[${code}] => ${reason}`);
       connectStatus.value = 3;
       setRoomInputStatus(false);
       switch (code) {
@@ -331,12 +331,12 @@ const connectLive = function () {
           SkMessage.warning('无法正常接收弹幕，准备重连中');
           break;
         default:
-          CLog.warn('DyCast 重连中 =>', count);
+          CLog.warn('直播间重连中 =>', count);
           SkMessage.warning(`正在重连中: ${count}`);
       }
     });
     cast.on('reconnect', ev => {
-      CLog.info('DyCast 重连成功');
+      CLog.info('直播间重连成功');
       SkMessage.success('房间重连完成');
     });
     cast.connect();
@@ -360,7 +360,7 @@ const relayCast = function () {
     SkMessage.info(`转发连接中: ${relayUrl.value}`);
     const cast = new RelayCast(relayUrl.value);
     cast.on('open', () => {
-      CLog.info(`DyCast 转发连接成功`);
+      CLog.info('弹幕转发连接成功');
       SkMessage.success(`已开始转发`);
       setRelayInputStatus(true);
       relayStatus.value = 1;
@@ -371,7 +371,7 @@ const relayCast = function () {
       }
     });
     cast.on('close', (code, msg) => {
-      CLog.info(`(${code})dycast 转发已关闭: ${msg || '未知原因'}`);
+      CLog.info(`(${code})弹幕转发已关闭: ${msg || '未知原因'}`);
       if (code === 1000) SkMessage.info(`已停止转发`);
       else SkMessage.warning(`转发已停止: ${msg || '未知原因'}`);
       setRelayInputStatus(false);
@@ -379,7 +379,7 @@ const relayCast = function () {
       addConsoleMessage('转发已关闭');
     });
     cast.on('error', ev => {
-      CLog.warn(`dycast 转发出错: ${ev.message}`);
+      CLog.warn(`弹幕转发出错: ${ev.message}`);
       SkMessage.error(`转发出错了: ${ev.message}`);
       setRelayInputStatus(false);
       relayStatus.value = 2;

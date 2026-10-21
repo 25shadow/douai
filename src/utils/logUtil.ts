@@ -256,7 +256,7 @@ class Logger {
 }
 
 function test() {
-  const MLog = new Logger({ prefix: 'dycast' });
+  const MLog = new Logger({ prefix: 'douai' });
   MLog.debug('debug message');
   MLog.info('info message');
   MLog.warn('warning message');
@@ -270,9 +270,9 @@ function test() {
  * @param color
  */
 export const printInfo = function (
-  tip: string = '抖音弹幕姬',
-  link: string = 'https://github.com/skmcj/dycast',
-  color: string = '#fe2c55'
+  tip: string = 'DouAi 直播互动工作台',
+  link: string = 'https://github.com/25shadow/douai',
+  color: string = '#89cfbd'
 ) {
   console.log(
     `%c ${tip} %c ${link}`,
@@ -281,19 +281,9 @@ export const printInfo = function (
   );
 };
 
-export const printSKMCJ = function () {
-  const info = `
- ________  ___  __    _____ ______   ________        ___     
-|\\   ____\\|\\  \\|\\  \\ |\\   _ \\  _   \\|\\   ____\\      |\\  \\    
-\\ \\  \\___|\\ \\  \\/  /|\\ \\  \\\\\\__\\ \\  \\ \\  \\___|      \\ \\  \\   
- \\ \\_____  \\ \\   ___  \\ \\  \\\\|__| \\  \\ \\  \\       __ \\ \\  \\  
-  \\|____|\\  \\ \\  \\\\ \\  \\ \\  \\    \\ \\  \\ \\  \\____ |\\  \\\\_\\  \\ 
-    ____\\_\\  \\ \\__\\\\ \\__\\ \\__\\    \\ \\__\\ \\_______\\ \\________\\
-   |\\_________\\|__| \\|__|\\|__|     \\|__|\\|_______|\\|________|
-   \\|_________|
-  `;
-  console.log(`%c${info}`, `color: #00faf0`);
+export const printDouAi = function () {
+  console.log('%cDouAi', 'color: #89cfbd');
 };
 
-export const CLog = new Logger({ prefix: 'dycast' });
+export const CLog = new Logger({ prefix: 'douai' });
 // RLog.setLevel(LogLevel.error);
