@@ -157,6 +157,16 @@ const BASE_URL = `${location.origin.replace(/^http/, 'ws')}/socket/webcast/im/pu
 /** SDK 版本 */
 export const VERSION = '1.0.15';
 
+function pickRoomMetric(...candidates: Array<string | number | undefined>): string | number | undefined {
+  for (const candidate of candidates) {
+    if (candidate === undefined || candidate === null) continue;
+    const text = String(candidate).trim();
+    if (!text || text === '0') continue;
+    return candidate;
+  }
+  return void 0;
+}
+
 /**
  * 默认配置
  */
@@ -392,6 +402,9 @@ export class DyCast {
         } else {
           // 初次连接
           this.emitter.emit('open', ev, this.info);
+          if (this.imInfo?.messages?.length) {
+            this._dealMessages(this.imInfo.messages as Message[]);
+          }
         }
         this.ping();
         this._afterOpen();
@@ -617,20 +630,23 @@ export class DyCast {
             message.groupCount || message.repeatCount || message.comboCount,
             message.repeatEnd
           );
+          if (message.toUser?.followInfo?.followerCount) {
+            data.room = { followCount: pickRoomMetric(message.toUser.followInfo.followerCount) };
+          }
           break;
         case CastMethod.LIKE:
           message = decodeLikeMessage(payload);
           data.method = CastMethod.LIKE;
           data.user = this._getCastUser(message.user);
           data.content = `为主播点赞了(${message.count})`;
-          data.room = { likeCount: message.total };
+          data.room = { likeCount: pickRoomMetric(message.total) };
           break;
         case CastMethod.MEMBER:
           message = decodeMemberMessage(payload);
           data.method = CastMethod.MEMBER;
           data.user = this._getCastUser(message.user);
           data.content = '进入直播间';
-          data.room = { audienceCount: message.memberCount };
+          data.room = { audienceCount: pickRoomMetric(message.memberCount, message.popStr) };
           break;
         case CastMethod.SOCIAL:
           message = decodeSocialMessage(payload);
@@ -648,7 +664,10 @@ export class DyCast {
           message = decodeRoomUserSeqMessage(payload);
           data.method = CastMethod.ROOM_USER_SEQ;
           data.rank = this._getCastRanksA(message.ranks);
-          data.room = { audienceCount: message.total, totalUserCount: message.totalUser };
+          data.room = {
+            audienceCount: pickRoomMetric(message.total, message.onlineUserForAnchor, message.totalStr, message.popStr),
+            totalUserCount: pickRoomMetric(message.totalUser, message.totalPvForAnchor, message.totalUserStr)
+          };
           break;
         case CastMethod.CONTROL:
           message = decodeControlMessage(payload);
@@ -664,7 +683,14 @@ export class DyCast {
         case CastMethod.ROOM_STATS:
           message = decodeRoomStatsMessage(payload);
           data.method = CastMethod.ROOM_STATS;
-          data.room = { audienceCount: message.displayMiddle };
+          data.room = {
+            audienceCount: pickRoomMetric(
+              message.total,
+              message.displayValue,
+              message.displayMiddle,
+              message.displayShort
+            )
+          };
           break;
       }
       if (!data.method) return null;
@@ -685,6 +711,10 @@ export class DyCast {
   private _getCastSocial(data?: SocialMessage): PartialDyMessage | undefined {
     if (!data) return void 0;
     const res: PartialDyMessage = {};
+    const followCount = pickRoomMetric(data.followCount);
+    if (followCount !== undefined) {
+      res.room = { followCount };
+    }
     switch (Number(data.action)) {
       case SocialAction.Follow:
         res.content = '关注了主播';

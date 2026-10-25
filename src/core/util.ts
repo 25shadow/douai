@@ -38,14 +38,27 @@ export const parseLiveHtml_old = function (html: string): DyLiveInfo | null {
       json = json.replace(REG.reg, REG.str);
     }
     const data = JSON.parse(json);
+    const roomInfo = data?.['state']?.['roomStore']?.['roomInfo'] || {};
+    const room = roomInfo['room'] || {};
+    const stats = room['stats'] || {};
+    const anchor = roomInfo['anchor'] || room['owner'] || {};
+    const followInfo = anchor['follow_info'] || room['owner']?.['follow_info'] || {};
     return {
-      roomId: data['state']['roomStore']['roomInfo']['roomId'],
+      roomId: roomInfo['roomId'],
       uniqueId: data['state']['userStore']['odin']['user_unique_id'],
-      avatar: data['state']['roomStore']['roomInfo']['anchor']?.['avatar_thumb']?.['url_list'][0],
-      cover: data['state']['roomStore']['roomInfo']['room']?.['cover']?.['url_list'][0],
-      nickname: data['state']['roomStore']['roomInfo']['anchor']['nickname'],
-      title: data['state']['roomStore']['roomInfo']['room']['title'],
-      status: data['state']['roomStore']['roomInfo']['room']['status']
+      avatar: anchor?.['avatar_thumb']?.['url_list']?.[0],
+      cover: room?.['cover']?.['url_list']?.[0],
+      nickname: anchor['nickname'],
+      title: room['title'],
+      status: room['status'],
+      audienceCount: room['user_count_str'] || stats['user_count_str'] || room['user_count'],
+      likeCount: room['like_count'] || stats['like_count'] || stats['like_count_str'],
+      followCount:
+        followInfo['follower_count_str'] ||
+        followInfo['follower_count'] ||
+        stats['follow_count'] ||
+        stats['follower_count'],
+      totalUserCount: stats['total_user_str'] || stats['total_user'] || room['total_user_str']
     };
   } catch (err) {
     return null;
@@ -84,6 +97,14 @@ export const parseLiveHtml = function (html: string): DyLiveInfo | null {
       }
       return res;
     }
+    function extractFirstMatch(source: string, patterns: RegExp[]) {
+      for (const pattern of patterns) {
+        const match = pattern.exec(source);
+        const value = match?.[1] || match?.[2];
+        if (value && value !== '0') return value;
+      }
+      return '';
+    }
     function decodeUnicodeUrl(url: string) {
       if (url) return url.replace(/\\u0026/g, '&');
       else return url;
@@ -96,6 +117,26 @@ export const parseLiveHtml = function (html: string): DyLiveInfo | null {
     const nickname = extractJsonField('nickname', json);
     const title = extractJsonField('title', json);
     const status = extractJsonField('status', json);
+    const roomInfoIndex = json.indexOf('"roomInfo":{');
+    const roomInfoSlice = roomInfoIndex >= 0 ? json.slice(roomInfoIndex) : json;
+    const audienceCount = extractFirstMatch(roomInfoSlice, [
+      /"user_count_str":"([^"]+)"/,
+      /"user_count":(?:"([0-9]+)"|([0-9]+))/
+    ]);
+    const likeCount = extractFirstMatch(roomInfoSlice, [
+      /"like_count_str":"([^"]+)"/,
+      /"like_count":(?:"([0-9]+)"|([0-9]+))/
+    ]);
+    const followCount = extractFirstMatch(roomInfoSlice, [
+      /"follower_count_str":"([^"]+)"/,
+      /"follower_count":(?:"([0-9]+)"|([0-9]+))/,
+      /"follow_count_str":"([^"]+)"/,
+      /"follow_count":(?:"([0-9]+)"|([0-9]+))/
+    ]);
+    const totalUserCount = extractFirstMatch(roomInfoSlice, [
+      /"total_user_str":"([^"]+)"/,
+      /"total_user":(?:"([0-9]+)"|([0-9]+))/
+    ]);
     return {
       roomId,
       uniqueId,
@@ -103,7 +144,11 @@ export const parseLiveHtml = function (html: string): DyLiveInfo | null {
       cover: decodeUnicodeUrl(cover),
       nickname,
       title,
-      status: parseInt(status || '4')
+      status: parseInt(status || '4'),
+      audienceCount: audienceCount || undefined,
+      likeCount: likeCount || undefined,
+      followCount: followCount || undefined,
+      totalUserCount: totalUserCount || undefined
     };
   } catch (err) {
     return null;

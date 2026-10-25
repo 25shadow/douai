@@ -3,17 +3,26 @@ import type { VoiceConfig, LiveVoiceScene } from './voiceConfig';
 import { speak, voiceManager } from './voiceManager.ts';
 
 const fallbackName = '观众';
+let lastAnnouncedGiftSig = '';
+let lastAnnouncedGiftAt = 0;
 
 export function createLiveAnnouncement(message: DyMessage, config: VoiceConfig) {
   let scene: LiveVoiceScene;
   let values: Record<string, string>;
   const name = message.user?.name?.trim() || fallbackName;
   switch (message.method) {
-    case CastMethod.GIFT:
-      if (message.gift?.repeatEnd !== undefined && message.gift.repeatEnd !== 0) return;
+    case CastMethod.GIFT: {
+      const giftName = message.gift?.name || '礼物';
+      const count = String(message.gift?.count || 1);
+      const sig = `${message.user?.id || name}:${giftName}:${count}`;
+      const now = Date.now();
+      if (sig === lastAnnouncedGiftSig && now - lastAnnouncedGiftAt < 400) return;
+      lastAnnouncedGiftSig = sig;
+      lastAnnouncedGiftAt = now;
       scene = 'gift';
-      values = { 昵称: name, 礼物: message.gift?.name || '礼物', 数量: String(message.gift?.count || 1) };
+      values = { 昵称: name, 礼物: giftName, 数量: count };
       break;
+    }
     case CastMethod.LIKE: {
       scene = 'like';
       const count = message.content?.match(/\((\d+)\)/)?.[1] || '1';

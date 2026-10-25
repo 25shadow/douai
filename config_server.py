@@ -1,6 +1,10 @@
 import json
+import os
 import re
+import signal
 import sqlite3
+import subprocess
+import time
 import urllib.error
 import urllib.request
 from contextlib import closing
@@ -228,6 +232,12 @@ def generate_questions(data):
 
 
 class ConfigHandler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        try:
+            super().log_message(format, *args)
+        except OSError:
+            pass
+
     def _send(self, status, body):
         payload = json.dumps(body, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -312,7 +322,42 @@ class ConfigHandler(BaseHTTPRequestHandler):
             self._send(400, {"error": str(error)})
 
 
+class ReusableThreadingHTTPServer(ThreadingHTTPServer):
+    allow_reuse_address = True
+
+
+def _is_server_healthy(port=8787):
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        with opener.open(f"http://127.0.0.1:{port}/api/config", timeout=1.5) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+
+def _TerminateStaleServer():
+    my_pid = os.getpid()
+    try:
+        output = subprocess.check_output(["pgrep", "-f", "config_server.py"], text=True)
+        for line in output.splitlines():
+            pid = int(line.strip())
+            if pid != my_pid:
+                os.kill(pid, signal.SIGTERM)
+        time.sleep(0.3)
+    except Exception:
+        pass
+
+
 if __name__ == "__main__":
     init_db()
-    print("DouAi SQLite config API: http://127.0.0.1:8787")
-    ThreadingHTTPServer(("127.0.0.1", 8787), ConfigHandler).serve_forever()
+    if _is_server_healthy(8787):
+        print("DouAi SQLite config API already running: http://127.0.0.1:8787")
+        try:
+            while True:
+                time.sleep(3600)
+        except KeyboardInterrupt:
+            pass
+    else:
+        _TerminateStaleServer()
+        print("DouAi SQLite config API: http://127.0.0.1:8787")
+        ReusableThreadingHTTPServer(("127.0.0.1", 8787), ConfigHandler).serve_forever()

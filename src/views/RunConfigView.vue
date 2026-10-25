@@ -1,43 +1,248 @@
 <template>
-  <section class="page">
-    <header class="page-heading">
-      <div><span class="eyebrow">运行设置</span><h1>运行配置</h1><p>填写房间号并管理直播弹幕与 WS 转发连接。</p></div>
+  <div class="connect-page">
+    <header class="page-top-header">
+      <div class="header-titles">
+        <span class="sub-category">LIVE STREAM CONNECTION</span>
+        <h1>连接直播间</h1>
+        <p>输入抖音直播间链接或房间号，连接后即可在直播控制台与游戏窗口中实时接收弹幕、点赞与礼物。</p>
+      </div>
+
+      <div class="connection-quick-badge" :class="liveState.connection">
+        <span class="badge-dot"></span>
+        <span>{{ simulationState.active ? '模拟直播运行中' : liveState.connectionLabel }}</span>
+      </div>
     </header>
-    <p v-if="configError" class="config-error" role="alert">{{ configError }}</p>
-    <nav class="config-tabs" aria-label="运行配置分区">
-      <button type="button" :class="{ active: activeTab === 'room' }" @click="activeTab = 'room'">直播连接</button>
-      <button type="button" :class="{ active: activeTab === 'session' }" @click="activeTab = 'session'">登录凭证</button>
-      <button type="button" :class="{ active: activeTab === 'relay' }" @click="activeTab = 'relay'">弹幕转发</button>
-      <button type="button" :class="{ active: activeTab === 'behavior' }" @click="activeTab = 'behavior'">运行行为</button>
+
+    <p v-if="configError" class="config-error-banner" role="alert">
+      {{ configError }}
+    </p>
+
+    <!-- 分区导航 -->
+    <nav class="desktop-tabs-nav" aria-label="运行配置分区">
+      <button 
+        type="button" 
+        class="tab-btn"
+        :class="{ active: activeTab === 'room' }" 
+        @click="activeTab = 'room'"
+      >
+        <Radio :size="15" />
+        <span>直播间连接</span>
+      </button>
+
+      <button 
+        type="button" 
+        class="tab-btn"
+        :class="{ active: activeTab === 'session' }" 
+        @click="activeTab = 'session'"
+      >
+        <KeyRound :size="15" />
+        <span>抖音登录凭证 (SessionId)</span>
+      </button>
+
+      <button 
+        type="button" 
+        class="tab-btn"
+        :class="{ active: activeTab === 'relay' }" 
+        @click="activeTab = 'relay'"
+      >
+        <Share2 :size="15" />
+        <span>WebSocket 弹幕转发</span>
+      </button>
+
+      <button 
+        type="button" 
+        class="tab-btn"
+        :class="{ active: activeTab === 'behavior' }" 
+        @click="activeTab = 'behavior'"
+      >
+        <Sliders :size="15" />
+        <span>运行与自动化行为</span>
+      </button>
     </nav>
 
-    <section v-if="activeTab === 'room'" class="settings-pane">
-      <header class="pane-heading"><h2>直播间连接</h2><p>输入抖音直播间房间号，连接后可在直播控制台查看实时数据。</p></header>
-      <div class="modal-form">
-        <label for="room-id">抖音房间号</label><div class="action-row"><input id="room-id" v-model.trim="config.roomId" placeholder="请输入抖音直播间房间号" :disabled="liveState.connection === 'live' || liveState.connection === 'connecting'" /><button class="action-btn" :class="{ stop: liveState.connection === 'live' }" :disabled="simulationState.active || !configReady" @click="toggleRoom">{{ simulationState.active ? '模拟中' : liveState.connection === 'live' ? '断开' : liveState.connection === 'connecting' ? '连接中…' : '连接' }}</button></div>
-        <div class="status-line"><span class="status-dot" :class="simulationState.active ? 'connecting' : liveState.connection"></span>{{ simulationState.active ? '模拟直播进行中；真实房间连接已锁定' : liveState.connectionLabel }}<span v-if="liveState.error && liveState.connection === 'error'" class="error">{{ liveState.error }}</span></div>
+    <!-- 直播连接 -->
+    <section v-if="activeTab === 'room'" class="tab-content-card">
+      <div class="pane-header">
+        <div class="pane-title-wrap">
+          <Radio :size="18" class="icon-brand" />
+          <h2>抖音直播间连接</h2>
+        </div>
+        <span class="pane-desc">支持直接输入房间号或粘贴完整直播间网址，系统自动解析</span>
+      </div>
+
+      <div class="form-body">
+        <div class="input-action-group">
+          <label for="room-id">房间号 / 直播间网址</label>
+          <div class="input-with-button">
+            <input 
+              id="room-id" 
+              v-model.trim="config.roomId" 
+              placeholder="请输入房间号或如 https://live.douyin.com/7128392182" 
+              :disabled="liveState.connection === 'live' || liveState.connection === 'connecting'"
+              @input="handleRoomInput"
+            />
+            <button 
+              class="connect-action-btn" 
+              :class="{ disconnect: liveState.connection === 'live' }" 
+              :disabled="simulationState.active || !configReady || !config.roomId" 
+              @click="toggleRoom"
+            >
+              {{ simulationState.active ? '模拟中' : liveState.connection === 'live' ? '断开连接' : liveState.connection === 'connecting' ? '正在连接…' : '立即连接' }}
+            </button>
+          </div>
+        </div>
+
+        <div class="status-summary-bar" :class="liveState.connection">
+          <span class="state-dot"></span>
+          <span class="state-text">
+            {{ simulationState.active ? '本地模拟直播进行中；真实房间连接已锁定' : liveState.connectionLabel }}
+          </span>
+          <span v-if="liveState.error && liveState.connection === 'error'" class="state-error-text">
+            原因：{{ liveState.error }}
+          </span>
+          <span v-if="liveState.liveInfo?.nickname" class="anchor-name">
+            主播：{{ liveState.liveInfo.nickname }}
+          </span>
+        </div>
+
+        <!-- 帮助提示 -->
+        <div class="connection-tips-box">
+          <h4>💡 连接小提示：</h4>
+          <ul>
+            <li>进入任意抖音直播间，复制浏览器地址栏中的链接粘贴到上方，即可自动截取真实房间号。</li>
+            <li>无需下载额外抓包工具，DouAi 已内置长连接协议解析引擎。</li>
+            <li>若要获取包含更高准确度的礼物消息，请切换到「抖音登录凭证」页面配置 sessionid。</li>
+          </ul>
+        </div>
       </div>
     </section>
-    <section v-else-if="activeTab === 'session'" class="settings-pane">
-      <header class="pane-heading"><h2>抖音登录凭证</h2><p>获取完整直播间消息需要登录态，只需填写 sessionid，不要粘贴整段 Cookie。</p></header>
-      <div class="modal-form"><label for="session-id">sessionid</label><div class="session-row"><input id="session-id" v-model="sessionId" type="password" autocomplete="off" placeholder="粘贴 Cookie 中 sessionid 的值" :disabled="sessionBusy || sessionStatus === 'valid'" /><button class="action-btn" :disabled="sessionBusy || !sessionId.trim()" @click="saveSession">{{ sessionBusy ? '验证中…' : '验证并保存' }}</button></div>
-        <div class="session-state" :class="sessionStatus"><span class="status-dot" :class="sessionStatus === 'valid' ? 'live' : sessionStatus === 'checking' ? 'connecting' : sessionStatus === 'invalid' ? 'error' : ''"></span><span>{{ sessionMessage }}</span><strong v-if="sessionNickname">{{ sessionNickname }}</strong><button v-if="sessionStatus === 'valid'" class="text-action" @click="clearSession">退出登录</button></div>
-        <details class="cookie-help"><summary>如何快速获取 sessionid</summary><ol><li>在浏览器打开 <a href="https://live.douyin.com/" target="_blank" rel="noreferrer">抖音直播</a> 并登录。</li><li>按 F12，在 Application → Cookies → live.douyin.com 中找到 sessionid。</li><li>只复制 Value，粘贴到上方并验证。</li></ol><small>凭证保存在当前浏览器 Cookie 中，不会写入 SQLite。修改后请断开并重新连接直播间。</small></details>
+
+    <!-- 登录凭证 (SessionId) -->
+    <section v-else-if="activeTab === 'session'" class="tab-content-card">
+      <div class="pane-header">
+        <div class="pane-title-wrap">
+          <KeyRound :size="18" class="icon-brand" />
+          <h2>抖音登录凭证 (SessionId)</h2>
+        </div>
+        <span class="pane-desc">获取完整高频直播间数据与粉丝团消息需要登录态，仅需填写 sessionid 即可</span>
+      </div>
+
+      <div class="form-body">
+        <div class="input-action-group">
+          <label for="session-id">sessionid 凭证值</label>
+          <div class="input-with-button">
+            <input 
+              id="session-id" 
+              v-model="sessionId" 
+              type="password" 
+              autocomplete="off" 
+              placeholder="粘贴 Cookie 中 sessionid 的值" 
+              :disabled="sessionBusy || sessionStatus === 'valid'" 
+            />
+            <button 
+              class="connect-action-btn" 
+              :disabled="sessionBusy || !sessionId.trim()" 
+              @click="saveSession"
+            >
+              {{ sessionBusy ? '验证中…' : '验证并保存' }}
+            </button>
+          </div>
+        </div>
+
+        <div class="session-state-bar" :class="sessionStatus">
+          <span class="state-dot"></span>
+          <span class="session-msg">{{ sessionMessage }}</span>
+          <strong v-if="sessionNickname" class="session-nick">账号：{{ sessionNickname }}</strong>
+          <button v-if="sessionStatus === 'valid'" class="logout-btn" @click="clearSession">退出登录</button>
+        </div>
+
+        <details class="cookie-help-accordion">
+          <summary>如何快速获取 sessionid？（点击展开操作教程）</summary>
+          <ol>
+            <li>在电脑浏览器打开 <a href="https://live.douyin.com/" target="_blank" rel="noreferrer">抖音直播官网</a> 并登录你的抖音账号。</li>
+            <li>键盘按下 <code>F12</code> 打开开发者工具，切换到 <strong>Application</strong>（应用程序）→ <strong>Cookies</strong> → <strong>live.douyin.com</strong>。</li>
+            <li>在列表中找到名为 <code>sessionid</code> 的项，双击并复制它的 <strong>Value</strong>。</li>
+            <li>粘贴到上方输入框，点击「验证并保存」即可。凭证只安全存储于本地浏览器/客户端，不会外泄。</li>
+          </ol>
+        </details>
       </div>
     </section>
-    <section v-else-if="activeTab === 'relay'" class="settings-pane">
-      <header class="pane-heading"><h2>弹幕转发</h2><p>将解析后的直播间消息通过 WebSocket 转发到指定地址。</p></header>
-      <div class="modal-form"><label for="relay-url">WebSocket 地址</label><div class="action-row"><input id="relay-url" v-model.trim="config.relayUrl" type="text" inputmode="url" autocomplete="url" placeholder="ws:// 或 wss://" :disabled="liveState.relayStatus === 'live' || liveState.relayStatus === 'connecting'" /><button class="action-btn" :class="{ stop: liveState.relayStatus === 'live' }" :disabled="!configReady" @click="toggleRelay">{{ liveState.relayStatus === 'live' ? '停止' : liveState.relayStatus === 'connecting' ? '连接中…' : '转发' }}</button></div><div class="status-line"><span class="status-dot" :class="liveState.relayStatus"></span>{{ relayLabel }}</div></div>
+
+    <!-- 弹幕转发 -->
+    <section v-else-if="activeTab === 'relay'" class="tab-content-card">
+      <div class="pane-header">
+        <div class="pane-title-wrap">
+          <Share2 :size="18" class="icon-brand" />
+          <h2>WebSocket 弹幕实时转发</h2>
+        </div>
+        <span class="pane-desc">将解析后的弹幕、礼物、点赞数据通过 WebSocket 实时广播给第三方程序或自建大屏</span>
+      </div>
+
+      <div class="form-body">
+        <div class="input-action-group">
+          <label for="relay-url">WebSocket 接收端地址</label>
+          <div class="input-with-button">
+            <input 
+              id="relay-url" 
+              v-model.trim="config.relayUrl" 
+              type="text" 
+              placeholder="如 ws://127.0.0.1:8765 或 wss://..." 
+              :disabled="liveState.relayStatus === 'live' || liveState.relayStatus === 'connecting'" 
+            />
+            <button 
+              class="connect-action-btn" 
+              :class="{ disconnect: liveState.relayStatus === 'live' }" 
+              :disabled="!configReady || !config.relayUrl" 
+              @click="toggleRelay"
+            >
+              {{ liveState.relayStatus === 'live' ? '停止转发' : liveState.relayStatus === 'connecting' ? '连接中…' : '开启转发' }}
+            </button>
+          </div>
+        </div>
+
+        <div class="status-summary-bar" :class="liveState.relayStatus">
+          <span class="state-dot"></span>
+          <span>转发服务状态：{{ relayLabel }}</span>
+        </div>
+      </div>
     </section>
-    <section v-else class="settings-pane">
-      <header class="pane-heading"><h2>运行行为</h2><p>自动化策略会保存到本地 SQLite 配置库。</p></header>
-      <div class="modal-form"><label class="check-row"><span><strong>直播连接成功后自动启动默认游戏</strong><small>当前默认游戏：知识问答</small></span><input v-model="config.autoStart" type="checkbox" :disabled="!configReady" @change="persist" /></label><label class="check-row"><span><strong>直播断开时暂停游戏</strong><small>重新连接后可从控制台继续操作</small></span><input v-model="config.pauseOnDisconnect" type="checkbox" :disabled="!configReady" @change="persist" /></label></div>
+
+    <!-- 运行行为 -->
+    <section v-else class="tab-content-card">
+      <div class="pane-header">
+        <div class="pane-title-wrap">
+          <Sliders :size="18" class="icon-brand" />
+          <h2>运行与自动化策略</h2>
+        </div>
+        <span class="pane-desc">设置连接状态改变时的自动化联动逻辑，配置自动保存到本地 SQLite</span>
+      </div>
+
+      <div class="form-body">
+        <div class="behavior-toggle-list">
+          <label class="behavior-row">
+            <div class="behavior-meta">
+              <strong>直播间连接成功后自动启动默认游戏</strong>
+              <small>连接抖音房间后，自动开启「知识问答」并开始抽题</small>
+            </div>
+            <input v-model="config.autoStart" type="checkbox" :disabled="!configReady" @change="persist" />
+          </label>
+
+          <label class="behavior-row">
+            <div class="behavior-meta">
+              <strong>直播断开时自动暂停游戏</strong>
+              <small>网络波动或下播时暂停游戏计时，重新连接后可无缝继续</small>
+            </div>
+            <input v-model="config.pauseOnDisconnect" type="checkbox" :disabled="!configReady" @change="persist" />
+          </label>
+        </div>
+      </div>
     </section>
-  </section>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
+import { Radio, KeyRound, Share2, Sliders } from '@lucide/vue';
 import { getMeInfo } from '@/core/request';
 import { loadConfig, saveConfig } from '@/services/configApi';
 import { createDycastSessionManager } from '@/services/dycastSession';
@@ -49,7 +254,7 @@ const sessionManager = createDycastSessionManager({ hasCookie, removeCookie, set
 const activeTab = ref<'room' | 'session' | 'relay' | 'behavior'>('room');
 const sessionId = ref('');
 const sessionStatus = ref<'empty' | 'checking' | 'valid' | 'invalid'>('empty');
-const sessionMessage = ref('未设置登录凭证；不填时评论等公开消息仍可正常接收');
+const sessionMessage = ref('未设置登录凭证；不填时公开弹幕仍可正常接收');
 const sessionNickname = ref('');
 const sessionBusy = ref(false);
 const configError = ref('');
@@ -82,11 +287,12 @@ const config = reactive({
   voicePrefix: '',
   aiConfig: { baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-4o-mini' }
 });
+
 const relayLabel = computed(() => ({
-  live: '转发中',
-  connecting: '正在连接转发服务',
+  live: '正在实时转发',
+  connecting: '正在连接转发服务…',
   error: '转发连接异常',
-  offline: '未转发'
+  offline: '未开启转发'
 })[liveState.relayStatus]);
 
 onMounted(async () => {
@@ -102,6 +308,15 @@ onMounted(async () => {
     configError.value = error instanceof Error ? error.message : 'SQLite 配置读取失败';
   }
 });
+
+// 自动从完整链接提取纯房间号
+function handleRoomInput() {
+  if (!config.roomId) return;
+  const match = config.roomId.match(/live\.douyin\.com\/([0-9a-zA-Z_]+)/);
+  if (match && match[1]) {
+    config.roomId = match[1];
+  }
+}
 
 async function verifySavedSession() {
   sessionBusy.value = true;
@@ -167,5 +382,393 @@ async function toggleRelay() {
 </script>
 
 <style scoped>
-.page{max-width:960px;margin:0 auto;padding:34px clamp(20px,4vw,48px) 60px}.page-heading{padding-bottom:22px;border-bottom:1px solid var(--line);margin-bottom:18px}.eyebrow{font-size:11px;color:var(--accent-2);font-weight:700}h1{margin:7px 0 5px;font-size:27px;letter-spacing:0}p{margin:0;color:var(--muted);font-size:12px;line-height:1.6}.config-tabs{display:flex;gap:3px;overflow-x:auto;margin-bottom:20px;border-bottom:1px solid var(--line)}.config-tabs button{flex:none;padding:10px 13px;border:0;border-bottom:2px solid transparent;color:var(--muted);background:transparent;font-size:11px;white-space:nowrap}.config-tabs button.active{border-bottom-color:var(--accent);color:var(--ink)}.settings-pane{max-width:780px;min-height:230px;padding:4px 0}.pane-heading{margin-bottom:22px}.pane-heading h2{margin:0 0 6px;font-size:16px}.pane-heading p{color:var(--muted);font-size:11px}.modal-form>label:not(.check-row){display:block;margin-bottom:8px;color:var(--muted);font-size:11px}.action-row{display:grid;grid-template-columns:minmax(0,1fr) 96px;gap:9px;align-items:center}.action-row input,.session-row input{width:100%;min-width:0;height:38px;padding:0 11px;border:1px solid var(--line);border-radius:5px;outline:none;color:var(--ink);background:#111917;font-size:12px}.action-row input:focus,.session-row input:focus{border-color:var(--accent-2)}.action-row input:disabled,.session-row input:disabled{opacity:.6}.action-btn{height:38px;padding:0 12px;border:1px solid var(--accent);border-radius:5px;background:var(--accent);color:#172016;font-size:12px;font-weight:700}.action-btn.stop{border-color:#a85e52;color:#e6a194;background:rgba(168,94,82,.12)}.status-line{display:flex;align-items:center;gap:8px;padding-top:11px;color:var(--muted);font-size:11px;flex-wrap:wrap}.status-dot{width:7px;height:7px;border-radius:50%;background:var(--faint)}.status-dot.live{background:var(--accent-2)}.status-dot.connecting{background:#e1b968}.status-dot.error{background:#df796b}.error,.config-error{color:#df9589}.config-error{margin:0 0 12px;font-size:12px}.check-row{display:flex;justify-content:space-between;align-items:center;gap:15px;padding:14px 0;border-bottom:1px solid rgba(191,220,204,.08)}.check-row:first-child{padding-top:0}.check-row strong,.check-row small{display:block}.check-row strong{font-size:12px;font-weight:550}.check-row small{margin-top:4px;color:var(--muted);font-size:11px}.check-row input{flex:0 0 auto;width:16px;height:16px;accent-color:var(--accent-2)}.session-row{display:grid;grid-template-columns:minmax(0,1fr) 120px;gap:9px}.action-btn:disabled{opacity:.5;cursor:not-allowed}.session-state{display:flex;align-items:center;gap:8px;padding-top:12px;color:var(--muted);font-size:11px;flex-wrap:wrap}.session-state.valid{color:var(--accent)}.session-state.invalid{color:#df9589}.session-state strong{font-weight:600}.text-action{margin-left:auto;border:0;color:var(--muted);background:none;font-size:11px;text-decoration:underline;text-underline-offset:3px}.cookie-help{margin-top:17px;color:var(--muted);font-size:11px}.cookie-help summary{width:max-content;cursor:pointer;color:var(--accent-2)}.cookie-help ol{display:grid;gap:5px;padding-left:20px;line-height:1.6}.cookie-help a{color:var(--accent)}.cookie-help small{display:block;line-height:1.6;color:var(--faint)}@media(max-width:620px){.page{padding:24px 16px}.config-tabs button{padding:10px 9px}.action-row{grid-template-columns:minmax(0,1fr) 86px}}
+.connect-page {
+  padding: 20px 24px 36px;
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.page-top-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.sub-category {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #10b981;
+}
+
+.header-titles h1 {
+  margin: 4px 0 2px;
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.header-titles p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.connection-quick-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+}
+
+.badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.connection-quick-badge.live {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+.connection-quick-badge.live .badge-dot {
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+}
+
+.connection-quick-badge.connecting {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+.connection-quick-badge.connecting .badge-dot {
+  background: #f59e0b;
+}
+
+.config-error-banner {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  color: #991b1b;
+  font-size: 13px;
+  margin: 0;
+}
+
+.desktop-tabs-nav {
+  display: flex;
+  gap: 6px;
+  background: #ffffff;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  box-shadow: var(--card-shadow);
+  width: fit-content;
+}
+
+.tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: all 0.15s;
+}
+
+.tab-btn:hover {
+  color: var(--text-main);
+  background: #f8fafc;
+}
+
+.tab-btn.active {
+  background: #ecfdf5;
+  color: #059669;
+  font-weight: 700;
+}
+
+.tab-content-card {
+  background: #ffffff;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  padding: 24px;
+  box-shadow: var(--card-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.pane-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.pane-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-brand {
+  color: #10b981;
+}
+
+.pane-title-wrap h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.pane-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.form-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.input-action-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.input-action-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.input-with-button {
+  display: flex;
+  gap: 10px;
+}
+
+.input-with-button input {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  font-size: 13px;
+  color: var(--text-main);
+  outline: none;
+  transition: all 0.15s;
+}
+
+.input-with-button input:focus {
+  border-color: #10b981;
+  background: #ffffff;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15);
+}
+
+.connect-action-btn {
+  padding: 0 22px;
+  background: #10b981;
+  color: #ffffff;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.connect-action-btn:hover:not(:disabled) {
+  background: #059669;
+}
+
+.connect-action-btn.disconnect {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #b91c1c;
+  box-shadow: none;
+}
+.connect-action-btn.disconnect:hover {
+  background: #fecaca;
+}
+
+.connect-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.status-summary-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.state-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.status-summary-bar.live .state-dot {
+  background: #10b981;
+}
+
+.status-summary-bar.connecting .state-dot {
+  background: #f59e0b;
+}
+
+.state-error-text {
+  color: #ef4444;
+  margin-left: 6px;
+}
+
+.anchor-name {
+  margin-left: auto;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.connection-tips-box {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  padding: 14px 18px;
+}
+
+.connection-tips-box h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #166534;
+}
+
+.connection-tips-box ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: #15803d;
+  line-height: 1.6;
+}
+
+.session-state-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 12px;
+}
+
+.session-state-bar.valid {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+.session-state-bar.valid .state-dot {
+  background: #10b981;
+}
+
+.session-nick {
+  margin-left: auto;
+  color: #065f46;
+}
+
+.logout-btn {
+  font-size: 12px;
+  color: #ef4444;
+  text-decoration: underline;
+  padding: 0 4px;
+}
+
+.cookie-help-accordion {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cookie-help-accordion summary {
+  color: #10b981;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.cookie-help-accordion ol {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.7;
+}
+
+.behavior-toggle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.behavior-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.behavior-row:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+}
+
+.behavior-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.behavior-meta strong {
+  font-size: 13px;
+  color: var(--text-main);
+}
+
+.behavior-meta small {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.behavior-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #10b981;
+  cursor: pointer;
+}
 </style>

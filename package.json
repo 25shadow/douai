@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "run-p dev:web dev:api",
     "dev:web": "vite",
-    "dev:api": "python config_server.py",
+    "dev:api": "python3 config_server.py",
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "build-only": "vite build",

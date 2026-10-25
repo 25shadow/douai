@@ -1,8 +1,10 @@
 import { reactive } from 'vue';
 import { DyCast } from '@/core/dycast';
 import { RelayCast } from '@/core/relay';
-import { CastMethod, type DyLiveInfo, type DyMessage } from '@/core/type';
-import { handleQuizMessages, quizRuntimeSettings, quizState, startQuiz, stopQuiz } from '@/game/quiz/quizStore';
+import { type DyLiveInfo, type DyMessage, type LiveRoom } from '@/core/type';
+import { dispatchMessagesToActiveGame, getGameModule, stopAllRunningGames } from '@/game/gameRegistry';
+import { quizRuntimeSettings, quizState } from '@/game/quiz/quizStore';
+import { loadConfig } from '@/services/configApi';
 import { createLiveFeedItems, type LiveFeedItem } from '@/services/liveFeed';
 import { announceLiveMessage } from '@/voice/liveAnnouncements';
 import {
@@ -158,6 +160,43 @@ function push<T>(list: T[], messages: T[]) {
   list.splice(80);
 }
 
+export function parseMetricCount(value: unknown): number {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
+  }
+  if (typeof value !== 'string') return 0;
+  const cleaned = value.replace(/,/g, '').trim();
+  if (!cleaned) return 0;
+  const match = cleaned.match(/(\d+(?:\.\d+)?)\s*(亿|万|[wW]|千|[kK])?/);
+  if (!match) return 0;
+  const base = Number.parseFloat(match[1]);
+  if (!Number.isFinite(base) || base <= 0) return 0;
+  const unit = match[2];
+  const multiplier =
+    unit === '亿'
+      ? 100000000
+      : unit === '万' || unit === 'w' || unit === 'W'
+        ? 10000
+        : unit === '千' || unit === 'k' || unit === 'K'
+          ? 1000
+          : 1;
+  return Math.round(base * multiplier);
+}
+
+export function applyRoomMetrics(room?: LiveRoom | DyLiveInfo | null) {
+  if (!room) return;
+  const audience = parseMetricCount(room.audienceCount);
+  if (audience > 0) liveState.audience = audience;
+  const likes = parseMetricCount(room.likeCount);
+  if (likes > 0) liveState.likes = likes;
+  const followers = parseMetricCount(room.followCount);
+  if (followers > 0) liveState.followers = followers;
+  const totalUsers = parseMetricCount(room.totalUserCount);
+  if (totalUsers > 0) liveState.totalUsers = totalUsers;
+}
+
+let pauseOnDisconnectPolicy = true;
+
 export function connectRoom(roomId = liveState.roomId) {
   if (simulationState.active) {
     liveState.error = '请先结束模拟直播，再连接真实直播间';
@@ -173,28 +212,45 @@ export function connectRoom(roomId = liveState.roomId) {
   liveState.connection = 'connecting';
   liveState.connectionLabel = '正在连接';
   liveState.error = '';
+  liveState.audience = 0;
+  liveState.likes = 0;
+  liveState.followers = 0;
+  liveState.totalUsers = 0;
   cast = new DyCast(roomId);
   cast.on('open', (_, info) => {
     liveState.connection = 'live';
     liveState.connectionLabel = '直播中';
     liveState.liveInfo = info || null;
+    applyRoomMetrics(info);
+    void loadConfig()
+      .then(saved => {
+        pauseOnDisconnectPolicy = Boolean(saved.pauseOnDisconnect);
+        const quizModule = getGameModule('quiz');
+        quizModule?.applySavedConfig(saved);
+        if (saved.autoStart && quizModule && !quizModule.isRunning()) {
+          quizModule.start(saved);
+        }
+      })
+      .catch(() => {
+        // Ignore config fetch failure during room open.
+      });
   });
   cast.on('message', messages => {
-    handleQuizMessages(messages);
+    dispatchMessagesToActiveGame(messages);
     messages.forEach(announceLiveMessage);
     push(liveState.events, messages);
     push(liveState.activityFeed, createLiveFeedItems(messages));
     messages.forEach(message => {
-      if (message.room?.audienceCount) liveState.audience = Number(message.room.audienceCount);
-      if (message.room?.likeCount) liveState.likes = Number(message.room.likeCount);
-      if (message.room?.followCount) liveState.followers = Number(message.room.followCount);
-      if (message.room?.totalUserCount) liveState.totalUsers = Number(message.room.totalUserCount);
+      applyRoomMetrics(message.room);
     });
     if (relay?.isConnected()) relay.send(JSON.stringify(messages));
   });
   cast.on('close', (_, reason) => {
     liveState.connection = 'offline';
     liveState.connectionLabel = reason || '已断开';
+    if (pauseOnDisconnectPolicy) {
+      stopAllRunningGames();
+    }
   });
   cast.on('error', error => {
     liveState.connection = 'error';
@@ -205,10 +261,14 @@ export function connectRoom(roomId = liveState.roomId) {
 }
 
 export function disconnectRoom() {
+  const wasConnected = Boolean(cast);
   cast?.close(1000, '控制台断开');
   cast = undefined;
   liveState.connection = 'offline';
   liveState.connectionLabel = '未连接';
+  if (wasConnected && pauseOnDisconnectPolicy) {
+    stopAllRunningGames();
+  }
 }
 
 export function startRelay(url = liveState.relayUrl) {
@@ -272,9 +332,10 @@ export function startLiveSimulation(gameId: unknown, input: Partial<LiveSimulati
   liveState.totalUsers = config.audience * 12;
   liveState.activityFeed = [];
   liveState.events = [];
-  if (gameId === 'quiz' && !quizState.running) {
-    startQuiz(quizRuntimeSettings);
-    simulationStartedQuiz = quizState.running;
+  const targetGame = getGameModule(gameId);
+  if (targetGame && !targetGame.isRunning()) {
+    targetGame.start();
+    simulationStartedQuiz = targetGame.isRunning();
   }
   publishSimulationState();
 
@@ -291,7 +352,7 @@ export function startLiveSimulation(gameId: unknown, input: Partial<LiveSimulati
         message.room = { audienceCount: liveState.audience, likeCount: liveState.likes, followCount: liveState.followers, totalUserCount: liveState.totalUsers };
       }
       if (message.method === 'WebcastGiftMessage' && simulationSequence % 6 === 0) liveState.followers += 1;
-      handleQuizMessages([message]);
+      dispatchMessagesToActiveGame([message]);
       announceLiveMessage(message);
       push(liveState.events, [message]);
       push(liveState.activityFeed, createLiveFeedItems([message]));
@@ -311,7 +372,7 @@ export function stopLiveSimulation() {
   simulationTimer = undefined;
   simulationState.active = false;
   simulationState.gameId = null;
-  if (simulationStartedQuiz) stopQuiz();
+  if (simulationStartedQuiz) stopAllRunningGames();
   simulationStartedQuiz = false;
   if (liveSnapshot) {
     Object.assign(liveState, liveSnapshot);

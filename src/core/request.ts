@@ -164,7 +164,8 @@ export const getImInfo = async function (roomId: string, uniqueId: string): Prom
       pushServer: res.pushServer,
       fetchInterval: res.fetchInterval,
       fetchType: res.fetchType,
-      liveCursor: res.liveCursor
+      liveCursor: res.liveCursor,
+      messages: res.messages
     };
   } catch (err) {
     const now = Date.now();

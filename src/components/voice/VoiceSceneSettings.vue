@@ -1,34 +1,410 @@
 <template>
-  <section class="scene-section">
-    <div class="section-top"><div><h2>直播事件播报</h2><p>选择需要播报的互动，并编辑实际朗读内容</p></div><span>{{ enabledCount }} / {{ Object.keys(sceneNames).length }}</span></div>
-    <article v-for="(name, key) in sceneNames" :key="key" class="scene-row">
-      <div class="scene-head">
-        <div><h3>{{ name }}</h3><p>{{ descriptions[key] }}</p></div>
-        <label class="switch" :aria-label="`启用${name}`"><input v-model="config.scenes[key].enabled" type="checkbox" /><span></span></label>
+  <section class="scenes-workbench-card">
+    <div class="scenes-card-top">
+      <div class="top-title-wrap">
+        <Sparkles :size="16" class="brand-icon" />
+        <div>
+          <h3>直播事件语音播报触发器</h3>
+          <p>开启后，当直播间发生对应事件时将自动合成语音并加入播报队列</p>
+        </div>
       </div>
-      <label class="template-label" :for="`template-${key}`">播报内容</label>
-      <textarea :id="`template-${key}`" v-model="config.scenes[key].template" maxlength="300" :disabled="!config.scenes[key].enabled" />
-      <div class="scene-foot">
-        <div class="variables"><span>变量</span><code v-for="variable in variables[key]" :key="variable">{{ variable }}</code></div>
-        <label class="cooldown">间隔 <input v-model.number="config.scenes[key].cooldownMs" type="number" min="0" max="60000" step="500" /> ms</label>
-      </div>
-    </article>
+      <span class="active-scenes-badge">
+        已启用 <b>{{ enabledCount }}</b> / {{ Object.keys(sceneNames).length }} 个场景
+      </span>
+    </div>
+
+    <!-- 5大场景卡片列表 -->
+    <div class="scenes-cards-grid">
+      <article 
+        v-for="(name, key) in sceneNames" 
+        :key="key" 
+        class="scene-event-card"
+        :class="{ enabled: config.scenes[key].enabled }"
+      >
+        <div class="event-card-header">
+          <div class="event-header-left">
+            <div class="scene-icon-wrap" :class="key">
+              <Gift v-if="key === 'gift'" :size="16" />
+              <Heart v-else-if="key === 'like'" :size="16" />
+              <UserCheck v-else-if="key === 'follow'" :size="16" />
+              <DoorOpen v-else-if="key === 'join'" :size="16" />
+              <Share2 v-else :size="16" />
+            </div>
+            <div class="scene-title-box">
+              <h4>{{ name }}</h4>
+              <small>{{ descriptions[key] }}</small>
+            </div>
+          </div>
+
+          <!-- iOS/Mac 风格开关 -->
+          <label class="mac-switch" :aria-label="`启用${name}`">
+            <input v-model="config.scenes[key].enabled" type="checkbox" />
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+
+        <div class="event-card-body" :class="{ disabled: !config.scenes[key].enabled }">
+          <label :for="`template-${key}`" class="input-label">播报文案模版</label>
+          <textarea 
+            :id="`template-${key}`" 
+            v-model="config.scenes[key].template" 
+            maxlength="300" 
+            :disabled="!config.scenes[key].enabled"
+            placeholder="请输入播报文案，点击下方变量可快速插入" 
+          />
+
+          <div class="event-card-footer">
+            <!-- 可点击动态变量标签 -->
+            <div class="variables-selector">
+              <span class="var-title">点击插入变量：</span>
+              <button 
+                v-for="v in variables[key]" 
+                :key="v"
+                type="button"
+                class="var-chip"
+                :disabled="!config.scenes[key].enabled"
+                :title="`插入 ${v}`"
+                @click="insertVariable(key, v)"
+              >
+                {{ v }}
+              </button>
+            </div>
+
+            <!-- 冷却间隔 -->
+            <div class="cooldown-box">
+              <span>最小间隔：</span>
+              <input 
+                v-model.number="config.scenes[key].cooldownMs" 
+                type="number" 
+                min="0" 
+                max="60000" 
+                step="500"
+                :disabled="!config.scenes[key].enabled"
+              />
+              <small>毫秒</small>
+            </div>
+          </div>
+        </div>
+      </article>
+    </div>
   </section>
 </template>
+
 <script setup lang="ts">
 import { computed } from 'vue';
+import { Sparkles, Gift, Heart, UserCheck, DoorOpen, Share2 } from '@lucide/vue';
 import { sceneNames, type LiveVoiceScene, type VoiceConfig } from '../../voice/voiceConfig';
+
 const config = defineModel<VoiceConfig>({ required: true });
-const enabledCount = computed(() => Object.values(config.value.scenes).filter(value => value.enabled).length);
+
+const enabledCount = computed(() => Object.values(config.value.scenes).filter(v => v.enabled).length);
+
 const descriptions: Record<LiveVoiceScene, string> = {
-  gift: '礼物连击结束时播报一次', like: '观众点赞时播报', follow: '新观众关注主播时播报',
-  join: '观众进入直播间时播报', share: '观众分享直播间时播报'
+  gift: '观众送出礼物或礼物连击结算时自动感谢',
+  like: '观众累计点赞达到一定频次时触发播报',
+  follow: '新观众关注主播或加入粉丝团时播报',
+  join: '观众进入直播间时触发个性化欢迎',
+  share: '观众转发分享直播间时触发感谢'
 };
+
 const variables: Record<LiveVoiceScene, string[]> = {
-  gift: ['{昵称}', '{礼物}', '{数量}'], like: ['{昵称}', '{点赞数}'],
-  follow: ['{昵称}'], join: ['{昵称}'], share: ['{昵称}']
+  gift: ['{昵称}', '{礼物}', '{数量}'],
+  like: ['{昵称}', '{点赞数}'],
+  follow: ['{昵称}'],
+  join: ['{昵称}'],
+  share: ['{昵称}']
 };
+
+function insertVariable(key: LiveVoiceScene, variable: string) {
+  config.value.scenes[key].template = (config.value.scenes[key].template || '') + variable;
+}
 </script>
+
 <style scoped>
-.scene-section{margin-top:30px}.section-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.section-top h2{font-size:15px;margin:0}.section-top p{font-size:11px;color:var(--faint);margin:6px 0 0}.section-top>span{font:11px ui-monospace,monospace;color:var(--muted)}.scene-row{padding:15px 0;border-top:1px solid var(--line)}.scene-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.scene-head h3{font-size:12px;font-weight:500;margin:0}.scene-head p{font-size:10px;color:var(--faint);margin:5px 0 0}.switch input{position:absolute;opacity:0}.switch span{display:block;width:30px;height:17px;border-radius:9px;background:#424c46;position:relative;cursor:pointer}.switch span:after{content:'';position:absolute;left:2px;top:2px;width:13px;height:13px;border-radius:50%;background:#dce7e0;transition:transform .15s}.switch input:checked+span{background:#679f8f}.switch input:checked+span:after{transform:translateX(13px)}.template-label{display:block;color:var(--muted);font-size:10px;margin-bottom:6px}textarea{display:block;width:100%;min-height:56px;resize:vertical;background:#141b18;border:1px solid var(--line);border-radius:4px;color:var(--ink);padding:9px;font:12px/1.7 'Douyin Sans','Microsoft YaHei',sans-serif;outline:0}textarea:focus{border-color:var(--accent)}textarea:disabled{opacity:.5}.scene-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:9px}.variables{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.variables>span,.cooldown{font-size:10px;color:var(--faint)}.variables code{font:10px ui-monospace,monospace;color:var(--accent);background:#1b2923;padding:3px 5px;border-radius:3px}.cooldown{display:flex;align-items:center;gap:5px;white-space:nowrap}.cooldown input{width:62px;background:#141b18;border:1px solid var(--line);border-radius:4px;color:var(--ink);padding:5px;font:10px ui-monospace,monospace}
+.scenes-workbench-card {
+  background: #ffffff;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  box-shadow: var(--card-shadow);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.scenes-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.top-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-icon {
+  color: #10b981;
+}
+
+.top-title-wrap h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.top-title-wrap p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.active-scenes-badge {
+  font-size: 12px;
+  color: #64748b;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.active-scenes-badge b {
+  color: #10b981;
+}
+
+.scenes-cards-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.scene-event-card {
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.scene-event-card:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+.scene-event-card.enabled {
+  background: #ffffff;
+  border-color: rgba(16, 185, 129, 0.4);
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.06);
+}
+
+.event-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.event-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.scene-icon-wrap {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.scene-icon-wrap.gift {
+  background: #fef3c7;
+  color: #d97706;
+}
+.scene-icon-wrap.like {
+  background: #fce7f3;
+  color: #db2777;
+}
+.scene-icon-wrap.follow {
+  background: #ecfdf5;
+  color: #059669;
+}
+.scene-icon-wrap.join {
+  background: #eff6ff;
+  color: #2563eb;
+}
+.scene-icon-wrap.share {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+.scene-title-box h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.scene-title-box small {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Mac 极简切换开关 */
+.mac-switch {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.mac-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch-slider {
+  position: absolute;
+  inset: 0;
+  background-color: #cbd5e1;
+  transition: 0.2s;
+  border-radius: 20px;
+}
+
+.switch-slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: 0.2s;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.mac-switch input:checked + .switch-slider {
+  background-color: #10b981;
+}
+
+.mac-switch input:checked + .switch-slider:before {
+  transform: translateX(18px);
+}
+
+.event-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: opacity 0.2s;
+}
+
+.event-card-body.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.input-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+textarea {
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: var(--text-main);
+  font-size: 12px;
+  line-height: 1.6;
+  outline: none;
+  resize: vertical;
+  transition: all 0.15s;
+}
+
+textarea:focus {
+  border-color: #10b981;
+  background: #ffffff;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15);
+}
+
+.event-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.variables-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.var-title {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.var-chip {
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+  color: #0f766e;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.var-chip:hover:not(:disabled) {
+  background: #ccfbf1;
+  border-color: #99f6e4;
+  color: #0d9488;
+}
+
+.cooldown-box {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.cooldown-box input {
+  width: 65px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+  text-align: center;
+  color: var(--text-main);
+  outline: none;
+}
+.cooldown-box input:focus {
+  border-color: #10b981;
+}
 </style>

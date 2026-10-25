@@ -39,6 +39,10 @@ export interface DyLiveInfo {
   nickname: string;
   title: string;
   status: number;
+  audienceCount?: number | string;
+  likeCount?: number | string;
+  followCount?: number | string;
+  totalUserCount?: number | string;
 }
 /** 直播间信息-初次连接信息 */
 export interface DyImInfo {
@@ -49,6 +53,7 @@ export interface DyImInfo {
   fetchType?: number;
   pushServer?: string;
   liveCursor?: string;
+  messages?: unknown[];
 }
 
 /**

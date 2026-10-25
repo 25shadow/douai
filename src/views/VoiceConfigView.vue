@@ -1,67 +1,912 @@
 <template>
-  <section class="voice-page">
-    <header class="page-heading">
-      <div><div class="breadcrumb">系统 <span>/</span> 语音引擎</div><h1>语音配置<span class="engine-badge">Browser TTS</span></h1></div>
-      <div class="save-group"><span class="save-status" aria-live="polite">{{ loading ? '正在加载…' : saving ? '正在保存…' : dirty ? '有未保存的更改' : message || '已同步' }}</span><button class="save-btn" :disabled="!loaded || loading || saving || !dirty" @click="save"><Save :size="15" />{{ saving ? '保存中…' : '保存设置' }}</button></div>
+  <div class="voice-studio-page">
+    <!-- 演播室顶部栏 -->
+    <header class="studio-header">
+      <div class="header-titles">
+        <div class="sub-category-tag">
+          <Sparkles :size="13" />
+          <span>VOICE STUDIO & SYNTHESIS</span>
+        </div>
+        <h1>
+          智能朗读工作台
+          <span class="engine-badge">Browser Speech Engine</span>
+        </h1>
+        <p>配置直播间朗读音色、音量语速微调、动态试听与直播互动事件播报策略。</p>
+      </div>
+
+      <div class="header-actions">
+        <!-- 待播队列与保存状态 -->
+        <div class="status-summary">
+          <span class="queue-chip">
+            <span class="dot-online"></span>
+            队列待播 {{ state.queueSize }} 条
+          </span>
+          <span class="save-status-text" aria-live="polite">
+            {{ loading ? '正在加载…' : saving ? '正在保存…' : dirty ? '● 有未保存的更改' : message || '已同步至本地配置' }}
+          </span>
+        </div>
+
+        <button 
+          class="save-voice-btn" 
+          :disabled="!loaded || loading || saving || !dirty" 
+          @click="save"
+        >
+          <Save :size="15" />
+          <span>{{ saving ? '保存中…' : '保存语音设置' }}</span>
+        </button>
+      </div>
     </header>
-    <div v-if="error" class="error-banner" role="alert"><AlertCircle :size="16" /><span>{{ error }}</span><button v-if="!loaded" class="text-btn" @click="load">重试</button></div>
-    <fieldset class="workbench" :disabled="loading || !loaded || saving">
-      <VoiceCatalog v-model:search="search" v-model:language="language" v-model:favorites-only="favoritesOnly" :voices="voices" :filtered-voices="filteredVoices" :languages="languages" :draft="draft" :supported="supported" @refresh="refresh" @select="selectVoice" @favorite="favorite" />
-      <div class="editor">
-        <section class="delivery-section">
-          <div class="editor-top"><div class="selected-voice"><span class="overline">CURRENT VOICE</span><h2>{{ selectedName }}</h2><span class="voice-lang">{{ draft.lang }} <span> / </span>{{ draft.voiceURI ? '指定音色' : '自动音色' }}</span></div><label class="enable-control"><span>项目播报</span><input v-model="draft.enabled" type="checkbox" role="switch" aria-label="启用项目语音播报" /></label></div>
-          <p v-if="selection.warning" class="warning" role="status"><AlertCircle :size="13" />{{ selection.warning }}</p>
-          <div class="preset-row"><span>声音预设</span><div class="presets"><button v-for="preset in presets" :key="preset.id" :class="{ active: matchesPreset(preset.id) }" @click="draft = applyVoicePreset(draft, preset.id)">{{ preset.name }}</button></div></div>
-          <div class="parameter-grid">
-            <div v-for="parameter in parameters" :key="parameter.key" class="parameter"><div class="parameter-title"><label :for="`voice-${parameter.key}`">{{ parameter.label }}</label><div class="number-wrap"><input v-model.number="draft[parameter.key]" :aria-label="`${parameter.label}数值`" type="number" :min="parameter.min" :max="parameter.max" :step="parameter.step" /><span>{{ parameter.unit }}</span></div></div><input :id="`voice-${parameter.key}`" v-model.number="draft[parameter.key]" type="range" :min="parameter.min" :max="parameter.max" :step="parameter.step" /><div class="range-labels"><span>{{ parameter.min }}</span><span>{{ parameter.max }}</span></div></div>
+
+    <!-- 错误横幅提示 -->
+    <div v-if="error" class="error-banner" role="alert">
+      <AlertCircle :size="16" />
+      <span>{{ error }}</span>
+      <button v-if="!loaded" class="retry-btn" type="button" @click="load">重试连接</button>
+    </div>
+
+    <!-- 工作台主体两列布局：左侧音色库 | 右侧声音调谐与场景 -->
+    <fieldset class="workbench-grid" :disabled="loading || !loaded || saving">
+      
+      <!-- 1. 左侧：音色库组件 -->
+      <div class="catalog-column">
+        <VoiceCatalog 
+          v-model:search="search" 
+          v-model:language="language" 
+          v-model:favorites-only="favoritesOnly" 
+          :voices="voices" 
+          :filtered-voices="filteredVoices" 
+          :languages="languages" 
+          :draft="draft" 
+          :supported="supported" 
+          @refresh="refresh" 
+          @select="selectVoice" 
+          @favorite="favorite" 
+        />
+      </div>
+
+      <!-- 2. 右侧：调谐工作台、试听台与场景触发 -->
+      <div class="editor-column">
+        
+        <!-- 选定音色横幅与参数微调 -->
+        <section class="tuning-card">
+          <div class="voice-hero-banner">
+            <div class="voice-hero-left">
+              <div class="hero-avatar">
+                <Volume2 :size="24" />
+              </div>
+              <div class="hero-meta">
+                <span class="hero-tag">CURRENT ACTIVE VOICE</span>
+                <h2>{{ selectedName }}</h2>
+                <div class="hero-details">
+                  <span class="detail-pill">{{ draft.lang || '通用语言' }}</span>
+                  <span class="detail-pill">{{ draft.voiceURI ? '指定音色' : '系统自动匹配' }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 主开关 -->
+            <label class="master-switch-wrap">
+              <span class="switch-label">项目全局语音播报</span>
+              <input v-model="draft.enabled" type="checkbox" role="switch" />
+              <span class="switch-slider"></span>
+            </label>
           </div>
-          <div class="text-settings"><label>播报语言<input v-model="draft.lang" maxlength="50" placeholder="zh-CN" /></label><label>全局前缀<input v-model="draft.prefix" maxlength="100" placeholder="无前缀" /></label></div>
+
+          <!-- 警示信息 -->
+          <div v-if="selection.warning" class="warning-callout">
+            <AlertCircle :size="15" />
+            <span>{{ selection.warning }}</span>
+          </div>
+
+          <!-- 声音风格快捷预设 -->
+          <div class="presets-row">
+            <span class="section-label">声音风格预设：</span>
+            <div class="preset-buttons">
+              <button 
+                v-for="preset in presets" 
+                :key="preset.id" 
+                type="button"
+                class="preset-btn"
+                :class="{ active: matchesPreset(preset.id) }" 
+                @click="draft = applyVoicePreset(draft, preset.id)"
+              >
+                {{ preset.name }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 三大声音参数滑块 (音量、语速、音高) -->
+          <div class="sliders-grid">
+            <div v-for="param in parameters" :key="param.key" class="slider-box">
+              <div class="slider-top">
+                <label :for="`voice-${param.key}`">{{ param.label }}</label>
+                <div class="slider-val-box">
+                  <input 
+                    :id="`voice-num-${param.key}`"
+                    v-model.number="draft[param.key]" 
+                    type="number" 
+                    :min="param.min" 
+                    :max="param.max" 
+                    :step="param.step" 
+                  />
+                  <span>{{ param.unit }}</span>
+                </div>
+              </div>
+              <input 
+                :id="`voice-${param.key}`" 
+                v-model.number="draft[param.key]" 
+                type="range" 
+                :min="param.min" 
+                :max="param.max" 
+                :step="param.step" 
+                class="modern-range-slider"
+              />
+              <div class="slider-scale">
+                <span>{{ param.min }}{{ param.unit }}</span>
+                <span>{{ param.max }}{{ param.unit }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 全局前缀与语言设置 -->
+          <div class="prefix-inputs-row">
+            <div class="input-item">
+              <label>播报语言标准代码</label>
+              <input v-model.trim="draft.lang" maxlength="50" placeholder="如 zh-CN" />
+            </div>
+            <div class="input-item">
+              <label>全局播报前缀（可选）</label>
+              <input v-model="draft.prefix" maxlength="100" placeholder="如 【DouAi提醒】" />
+            </div>
+          </div>
         </section>
-        <section class="preview-tool">
-          <div class="section-top"><h2><Headphones :size="16" />声音试听</h2><select v-model="sample" aria-label="试听样例" @change="text = samples[sample]"><option value="general">通用样例</option><option value="gift">礼物感谢</option><option value="follow">新增关注</option></select></div>
-          <textarea v-model="text" aria-label="试听文本" maxlength="1000" spellcheck="false" />
-          <div class="preview-footer"><div class="transport"><button class="play-btn" :disabled="!supported || !text.trim()" title="播放试听" aria-label="播放试听" @click="preview"><Play :size="16" fill="currentColor" /></button><button class="icon-btn" :disabled="!playing" :title="state.status === 'paused' ? '继续播放' : '暂停播放'" :aria-label="state.status === 'paused' ? '继续播放' : '暂停播放'" @click="state.status === 'paused' ? resume() : pause()"><Play v-if="state.status === 'paused'" :size="16" /><Pause v-else :size="16" /></button><button class="icon-btn" :disabled="!playing" title="停止播放" aria-label="停止播放" @click="stop"><Square :size="14" /></button><span class="playback-status" aria-live="polite"><span class="playback-dot" :class="{ playing }"></span>{{ statusLabel }}</span></div><span class="char-count">{{ [...text].length }} / 1000</span></div>
-          <p v-if="state.currentText" class="current-text">{{ state.preview ? '试听' : '正在播报' }}：{{ state.currentText }}</p>
-          <p v-if="state.error || state.warning" class="playback-error" role="status">{{ state.error || state.warning }}</p>
+
+        <!-- 实时试听演练台 -->
+        <section class="testing-studio-card">
+          <div class="testing-top">
+            <div class="testing-title">
+              <Headphones :size="16" class="test-icon" />
+              <h3>声音实时试听台</h3>
+            </div>
+            <select v-model="sample" class="sample-select" @change="text = samples[sample]">
+              <option value="general">通用样例：欢迎来到直播间</option>
+              <option value="gift">礼物样例：感谢送出爱心礼物</option>
+              <option value="follow">关注样例：感谢新粉丝关注</option>
+            </select>
+          </div>
+
+          <textarea 
+            v-model="text" 
+            class="sample-textarea" 
+            maxlength="1000" 
+            placeholder="输入想要试听的内容，点击下方播放按钮即可立即调用当前参数发声…"
+          />
+
+          <div class="testing-transport-footer">
+            <div class="transport-controls">
+              <!-- 播放 -->
+              <button 
+                class="play-main-btn" 
+                :disabled="!supported || !text.trim()" 
+                title="播放当前试听文本" 
+                type="button"
+                @click="preview"
+              >
+                <Play :size="16" fill="currentColor" />
+                <span>试听声音</span>
+              </button>
+
+              <!-- 暂停 / 继续 -->
+              <button 
+                class="ctrl-icon-btn" 
+                :disabled="!playing" 
+                :title="state.status === 'paused' ? '继续播放' : '暂停播放'" 
+                type="button"
+                @click="state.status === 'paused' ? resume() : pause()"
+              >
+                <Play v-if="state.status === 'paused'" :size="14" />
+                <Pause v-else :size="14" />
+              </button>
+
+              <!-- 停止 -->
+              <button 
+                class="ctrl-icon-btn" 
+                :disabled="!playing" 
+                title="停止播放" 
+                type="button"
+                @click="stop"
+              >
+                <Square :size="14" />
+              </button>
+
+              <!-- 播放动态状态条与音波动画 -->
+              <div class="status-indicator-wrap">
+                <div v-if="playing" class="equalizer-bars">
+                  <span></span><span></span><span></span><span></span>
+                </div>
+                <span class="playback-badge" :class="{ active: playing }">
+                  {{ statusLabel }}
+                </span>
+              </div>
+            </div>
+
+            <span class="char-counter">{{ [...text].length }} / 1000 字符</span>
+          </div>
+
+          <p v-if="state.currentText" class="current-speech-hint">
+            正在朗读：{{ state.currentText }}
+          </p>
         </section>
+
+        <!-- 场景化事件播报设置组件 -->
         <VoiceSceneSettings v-model="draft" />
-        <div class="queue-status">当前待播 {{ state.queueSize }} 条</div>
+        
       </div>
     </fieldset>
-  </section>
+  </div>
 </template>
+
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { AlertCircle, Headphones, Pause, Play, Save, Square } from '@lucide/vue';
+import { 
+  Sparkles, Save, AlertCircle, Volume2, Headphones, 
+  Play, Pause, Square 
+} from '@lucide/vue';
 import VoiceCatalog from '../components/voice/VoiceCatalog.vue';
 import VoiceSceneSettings from '../components/voice/VoiceSceneSettings.vue';
 import { useVoiceWorkbench } from '../voice/useVoiceWorkbench';
 import { applyVoicePreset, createDefaultVoiceConfig } from '../voice/voiceConfig';
-const { draft, dirty, loading, saving, loaded, error, message, load, save, voices, state, search, language,
-  favoritesOnly, text, languages, filteredVoices, selection, selectedName, selectVoice, favorite, refresh,
-  preview, supported, pause, resume, stop } = useVoiceWorkbench();
+
+const { 
+  draft, dirty, loading, saving, loaded, error, message, load, save, voices, state, 
+  search, language, favoritesOnly, text, languages, filteredVoices, selection, 
+  selectedName, selectVoice, favorite, refresh, preview, supported, pause, resume, stop 
+} = useVoiceWorkbench();
+
 const parameters = [
-  { key: 'volume', label: '音量', min: 0, max: 1, step: .05, unit: '' },
-  { key: 'rate', label: '语速', min: .5, max: 2, step: .05, unit: 'x' },
-  { key: 'pitch', label: '音高', min: 0, max: 2, step: .05, unit: '' }
+  { key: 'volume', label: '音量调节', min: 0, max: 1, step: 0.05, unit: '' },
+  { key: 'rate', label: '语速倍率', min: 0.5, max: 2, step: 0.05, unit: 'x' },
+  { key: 'pitch', label: '音高音调', min: 0, max: 2, step: 0.05, unit: '' }
 ] as const;
-const presets = [{ id: 'natural', name: '自然' }, { id: 'live', name: '直播' }, { id: 'quick', name: '快速提醒' }] as const;
+
+const presets = [
+  { id: 'natural', name: '自然亲和' },
+  { id: 'live', name: '直播激动' },
+  { id: 'quick', name: '快速提醒' }
+] as const;
+
 function matchesPreset(id: 'natural' | 'live' | 'quick') {
   const value = applyVoicePreset(createDefaultVoiceConfig(), id);
   return parameters.every(p => draft.value[p.key] === value[p.key]);
 }
+
 const samples = {
-  general: '欢迎来到直播间，感谢大家的支持。',
-  gift: '感谢小星送出的爱心礼物3个！',
-  follow: '感谢小星关注直播间！'
+  general: '欢迎来到直播间，动动发财的小手点点赞，点个关注不迷路！',
+  gift: '感谢榜一大哥送出的浪漫热气球礼物，祝老板财源滚滚！',
+  follow: '感谢新朋友关注主播，快快加入粉丝团解锁更多特权！'
 };
+
 const sample = ref<keyof typeof samples>('general');
 const playing = computed(() => ['starting', 'speaking', 'paused'].includes(state.value.status));
 const statusLabel = computed(() => ({
-  idle: '待机', starting: '正在启动', speaking: '播放中', paused: '已暂停', unsupported: '引擎不可用', error: '播放失败'
+  idle: '待机中',
+  starting: '正在启动语音…',
+  speaking: '正在朗读中',
+  paused: '已暂停',
+  unsupported: '引擎不可用',
+  error: '播报失败'
 })[state.value.status]);
 </script>
+
 <style scoped>
-.voice-page{max-width:1480px;min-height:100vh;margin:0 auto;padding:30px 38px 45px;letter-spacing:0}.page-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;padding-bottom:25px;border-bottom:1px solid var(--line);margin-bottom:28px}.breadcrumb{font-size:11px;color:var(--faint)}.breadcrumb span{margin:0 9px;color:var(--line)}h1{display:flex;align-items:center;flex-wrap:wrap;gap:14px;font-size:26px;margin:12px 0 0;font-weight:600;letter-spacing:0}.engine-badge{font:10px ui-monospace,monospace;padding:5px 7px;color:var(--accent);border:1px solid rgba(137,207,189,.22);border-radius:4px}.save-group{display:flex;align-items:center;gap:15px;flex-shrink:0}.save-status{font-size:11px;color:var(--muted)}.save-btn{display:flex;align-items:center;justify-content:center;gap:8px;min-width:104px;padding:11px 14px;border:0;border-radius:5px;background:var(--accent);color:#14221d;font-size:12px;font-weight:600}.save-btn:disabled{opacity:.45;cursor:default}.error-banner{display:flex;align-items:flex-start;gap:9px;padding:13px;background:#352524;border:1px solid #74443e;border-radius:5px;color:#efaaa0;font-size:12px;margin-bottom:20px;overflow-wrap:anywhere}.error-banner>span{flex:1}.workbench{display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr);gap:30px;margin:0;padding:0;min-width:0;border:0}.editor{min-width:0}.editor-top{display:flex;justify-content:space-between;align-items:center;gap:20px}.overline{font:10px ui-monospace,monospace;color:var(--faint)}.selected-voice h2{font-size:18px;font-weight:500;line-height:1.5;margin:8px 0;overflow-wrap:anywhere}.selected-voice{min-width:0}.voice-lang{font:10px ui-monospace,monospace;color:var(--muted)}.voice-lang>span{color:var(--faint);margin:0 7px}.enable-control{display:flex;align-items:center;gap:11px;flex-shrink:0;font-size:11px;color:var(--muted)}.enable-control input{appearance:none;width:31px;height:18px;border-radius:12px;background:#424c46;position:relative;margin:0;cursor:pointer;transition:background .15s}.enable-control input:before{content:'';position:absolute;left:3px;top:3px;width:12px;height:12px;border-radius:50%;background:#dce7e0;transition:transform .15s}.enable-control input:checked{background:#679f8f}.enable-control input:checked:before{transform:translateX(13px)}.warning{display:flex;align-items:center;gap:6px;color:#d9ba79;font-size:11px;line-height:1.6}.preset-row{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-top:26px}.preset-row>span{font-size:11px;color:var(--muted)}.presets{display:flex;gap:3px;padding:3px;background:#101713;border:1px solid var(--line);border-radius:5px}.presets button{border:0;background:transparent;border-radius:3px;color:var(--faint);font-size:11px;padding:6px 12px}.presets button.active{background:var(--panel-2);color:var(--ink)}.parameter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin:23px 0}.parameter-title{display:flex;justify-content:space-between;align-items:center;gap:4px;margin-bottom:15px}.parameter-title>label{font-size:12px;color:var(--muted)}.number-wrap{display:flex;align-items:center;font:11px ui-monospace,monospace;color:var(--faint)}.number-wrap input{width:57px;padding:5px 4px;text-align:center;font:11px ui-monospace,monospace;background:#131a16;border:1px solid var(--line);border-radius:4px;color:var(--ink)}.number-wrap>span{margin-left:3px}.parameter input[type=range]{width:100%;height:3px;accent-color:var(--accent);display:block;margin:0;cursor:pointer}.range-labels{display:flex;justify-content:space-between;margin-top:9px;font:9px ui-monospace,monospace;color:var(--faint)}.text-settings{display:grid;grid-template-columns:120px minmax(0,1fr);gap:18px}.text-settings label,.advanced-fields label{display:grid;gap:9px;color:var(--muted);font-size:11px;min-width:0}.text-settings input,.advanced-fields input,.advanced-fields select{width:100%;min-width:0;background:#131a16;border:1px solid var(--line);border-radius:4px;padding:10px;color:var(--ink);font-size:12px;outline:0}input:focus,textarea:focus,select:focus{outline:1px solid var(--accent);outline-offset:2px}.preview-tool{margin:27px 0 30px;border:1px solid #3b4940;border-radius:6px;background:#19211d;padding:18px}.section-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px}.section-top h2{display:flex;align-items:center;gap:9px;margin:0;font-size:13px;font-weight:500}.section-top h2 svg{color:var(--accent)}.section-top select{background:transparent;color:var(--muted);border:0;padding:5px;font-size:10px;max-width:130px}.section-top select option{background:#19211d}textarea{width:100%;min-height:90px;resize:vertical;border:0;background:transparent;color:var(--ink);font:13px/1.9 'Douyin Sans','Microsoft YaHei',sans-serif;outline:0;padding:2px 0;letter-spacing:0}.preview-footer{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:12px;border-top:1px solid var(--line);margin-top:7px}.transport{display:flex;align-items:center;gap:6px}.icon-btn,.play-btn{display:grid;place-items:center;width:31px;height:31px;padding:0;border:1px solid var(--line);border-radius:4px;background:transparent;color:var(--muted)}.play-btn{background:var(--accent);border-color:var(--accent);color:#12231d;width:35px}.icon-btn:disabled,.play-btn:disabled{opacity:.3;cursor:default}.playback-status{display:flex;align-items:center;gap:6px;margin-left:9px;font-size:10px;color:var(--muted);white-space:nowrap}.playback-dot{width:5px;height:5px;background:var(--faint);border-radius:50%}.playback-dot.playing{background:var(--accent)}.char-count{font:9px ui-monospace,monospace;color:var(--faint);white-space:nowrap}.current-text{font-size:11px;color:var(--muted);line-height:1.7;max-height:58px;overflow:auto;overflow-wrap:anywhere;margin:13px 0 0}.playback-error{font-size:11px;color:#e6b27d;line-height:1.7;margin-bottom:0}.advanced{margin-top:10px;border-top:1px solid var(--line);padding-top:20px}.advanced summary{display:flex;justify-content:space-between;cursor:pointer;list-style:none;color:var(--muted);font-size:12px}.advanced summary::-webkit-details-marker{display:none}.advanced summary>span{display:flex;align-items:center;gap:8px}.advanced[open] summary>svg{transform:rotate(180deg)}.advanced-fields{display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:14px;margin-top:20px}.advanced-footer{display:flex;justify-content:space-between;align-items:center;margin-top:18px;font-size:10px;color:var(--faint)}.advanced-footer b{font-weight:400;color:var(--ink);margin-left:7px}.text-btn{display:flex;align-items:center;gap:6px;border:0;background:transparent;color:var(--accent);font-size:11px;padding:3px}.workbench:disabled{opacity:.6}button{transition:opacity .15s,background .15s}button:not(:disabled):hover{filter:brightness(1.1)}
-@media(max-width:1200px){.voice-page{padding:28px 25px 40px}.workbench{grid-template-columns:225px minmax(0,1fr);gap:24px}.parameter-grid{gap:15px}.save-group{gap:9px}}@media(max-width:1000px){.workbench{grid-template-columns:200px minmax(0,1fr);gap:20px}.editor-top{align-items:flex-start}.enable-control{flex-direction:column;gap:7px}.parameter-grid{gap:10px}.parameter-title{flex-direction:column;align-items:flex-start;gap:9px}.preset-row{align-items:flex-start;flex-direction:column}.advanced-fields{grid-template-columns:1fr 1fr}.advanced-fields label:first-child{grid-column:1/-1}.save-status{max-width:100px;line-height:1.6}.number-wrap input{width:65px}}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+.voice-studio-page {
+  padding: 18px 24px 36px;
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* 顶部栏 */
+.studio-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.sub-category-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #10b981;
+}
+
+.header-titles h1 {
+  margin: 4px 0 2px;
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.engine-badge {
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.header-titles p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.status-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.queue-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.dot-online {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+}
+
+.save-status-text {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.save-voice-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 20px;
+  border-radius: 8px;
+  background: #10b981;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+  transition: all 0.15s;
+}
+
+.save-voice-btn:hover:not(:disabled) {
+  background: #059669;
+}
+.save-voice-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  color: #991b1b;
+  font-size: 12px;
+}
+
+.retry-btn {
+  margin-left: auto;
+  font-size: 12px;
+  color: #ef4444;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* 演播室工作区 */
+.workbench-grid {
+  display: grid;
+  grid-template-columns: 310px minmax(0, 1fr);
+  gap: 18px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.catalog-column {
+  min-height: 0;
+}
+
+.editor-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* 选定音色与参数调谐卡片 */
+.tuning-card {
+  background: #ffffff;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  box-shadow: var(--card-shadow);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.voice-hero-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.voice-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.hero-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+  flex-shrink: 0;
+}
+
+.hero-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.hero-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: #10b981;
+  letter-spacing: 0.1em;
+  font-family: ui-monospace, monospace;
+}
+
+.hero-meta h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.hero-details {
+  display: flex;
+  gap: 6px;
+}
+
+.detail-pill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+/* 主开关控件 */
+.master-switch-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  position: relative;
+}
+
+.switch-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.master-switch-wrap input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.master-switch-wrap .switch-slider {
+  width: 42px;
+  height: 22px;
+  background-color: #cbd5e1;
+  border-radius: 22px;
+  position: relative;
+  transition: 0.2s;
+}
+
+.master-switch-wrap .switch-slider:before {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 2px;
+  bottom: 2px;
+  background: white;
+  border-radius: 50%;
+  transition: 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.master-switch-wrap input:checked + .switch-slider {
+  background-color: #10b981;
+}
+
+.master-switch-wrap input:checked + .switch-slider:before {
+  transform: translateX(20px);
+}
+
+.warning-callout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  font-size: 12px;
+}
+
+.presets-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.preset-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.preset-btn {
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.preset-btn:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+}
+
+.preset-btn.active {
+  background: #ecfdf5;
+  border-color: #10b981;
+  color: #065f46;
+  font-weight: 700;
+}
+
+.sliders-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.slider-box {
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.slider-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.slider-top label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.slider-val-box {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: ui-monospace, monospace;
+}
+
+.slider-val-box input {
+  width: 52px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  font-size: 11px;
+  text-align: center;
+  color: var(--text-main);
+  outline: none;
+}
+.slider-val-box input:focus {
+  border-color: #10b981;
+}
+
+.modern-range-slider {
+  width: 100%;
+  accent-color: #10b981;
+  cursor: pointer;
+}
+
+.slider-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-faint);
+  font-family: ui-monospace, monospace;
+}
+
+.prefix-inputs-row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 14px;
+}
+
+.input-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.input-item label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.input-item input {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  font-size: 12px;
+  outline: none;
+  color: var(--text-main);
+}
+.input-item input:focus {
+  border-color: #10b981;
+  background: #ffffff;
+}
+
+/* 试听演练台 */
+.testing-studio-card {
+  background: #ffffff;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  box-shadow: var(--card-shadow);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.testing-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.testing-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.test-icon {
+  color: #10b981;
+}
+
+.testing-title h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.sample-select {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  font-size: 12px;
+  color: #475569;
+  outline: none;
+}
+
+.sample-textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-main);
+  outline: none;
+  resize: vertical;
+}
+.sample-textarea:focus {
+  border-color: #10b981;
+  background: #ffffff;
+}
+
+.testing-transport-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 6px;
+}
+
+.transport-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.play-main-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-radius: 6px;
+  background: #10b981;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  transition: all 0.15s;
+}
+.play-main-btn:hover:not(:disabled) {
+  background: #059669;
+}
+.play-main-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ctrl-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  transition: all 0.15s;
+}
+.ctrl-icon-btn:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+.ctrl-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.status-indicator-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 6px;
+}
+
+.equalizer-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+.equalizer-bars span {
+  width: 3px;
+  background: #10b981;
+  border-radius: 2px;
+  animation: barBounce 0.8s infinite ease-in-out;
+}
+.equalizer-bars span:nth-child(1) { height: 60%; animation-delay: 0.1s; }
+.equalizer-bars span:nth-child(2) { height: 100%; animation-delay: 0.3s; }
+.equalizer-bars span:nth-child(3) { height: 40%; animation-delay: 0.2s; }
+.equalizer-bars span:nth-child(4) { height: 80%; animation-delay: 0.4s; }
+
+@keyframes barBounce {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+
+.playback-badge {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+}
+.playback-badge.active {
+  color: #10b981;
+  font-weight: 700;
+}
+
+.char-counter {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-family: ui-monospace, monospace;
+}
+
+.current-speech-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #059669;
+  background: #ecfdf5;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+@media (max-width: 960px) {
+  .workbench-grid {
+    grid-template-columns: 1fr;
+  }
+  .sliders-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
