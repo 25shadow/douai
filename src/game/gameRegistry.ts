@@ -24,6 +24,7 @@ export interface GameModuleDefinition {
   id: GameModuleId;
   name: string;
   badge: string;
+  description?: string;
   component: Component;
   isRunning: () => boolean;
   getStatusText: () => string;
@@ -37,6 +38,7 @@ const quizGameModule: GameModuleDefinition = {
   id: 'quiz',
   name: '知识问答',
   badge: '弹幕抢答',
+  description: '全员弹幕抢答 A/B/C/D，点赞排除错项与礼物免死',
   component: QuizBroadcastCanvas,
   isRunning: () => quizState.running,
   getStatusText: () => quizState.question?.title || quizState.status,
@@ -66,6 +68,7 @@ const versusGameModule: GameModuleDefinition = {
   id: 'versus',
   name: '阵营对抗',
   badge: '阵营PK',
+  description: '红蓝阵营答题拉扯拔河/血条，点赞破译错项与礼物暴击',
   component: VersusBroadcastCanvas,
   isRunning: () => versusState.running,
   getStatusText: () => versusState.status,

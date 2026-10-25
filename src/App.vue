@@ -50,7 +50,7 @@
           <!-- 4. 游戏大厅 -->
           <button 
             class="nav-item" 
-            :class="{ active: activePage === 'games' || activePage === 'quiz' }" 
+            :class="{ active: activePage === 'games' || activePage === 'quiz' || activePage === 'versus' }" 
             type="button"
             title="游戏大厅"
             @click="go('games')"
@@ -141,12 +141,12 @@
         <!-- 核心视图渲染 (默认优先展示直播控制台) -->
         <LiveConsoleView 
           v-if="activePage === 'console'" 
-          @navigate="go"
+          @navigate="handleNavigate"
         />
 
         <HomeDashboardView 
           v-else-if="activePage === 'home'" 
-          @navigate="go" 
+          @navigate="handleNavigate" 
           @open-license="showLicenseModal = true"
           @toggle-obs-window="toggleObsWindow"
         />
@@ -158,13 +158,20 @@
         <GameListView 
           v-else-if="activePage === 'games'" 
           @open-quiz="go('quiz')" 
+          @open-versus="go('versus')"
           @launch-obs="toggleObsWindow"
         />
 
         <QuizConfigView 
           v-else-if="activePage === 'quiz'" 
           @back="go('games')" 
-          @launch-obs="toggleObsWindow"
+          @launch-obs="toggleObsWindow('quiz')"
+        />
+
+        <VersusConfigView 
+          v-else-if="activePage === 'versus'" 
+          @back="go('games')" 
+          @launch-obs="toggleObsWindow('versus')"
         />
 
         <BgmMusicView 
@@ -212,6 +219,7 @@ import HomeDashboardView from './views/HomeDashboardView.vue';
 import RunConfigView from './views/RunConfigView.vue';
 import GameListView from './views/GameListView.vue';
 import QuizConfigView from './views/QuizConfigView.vue';
+import VersusConfigView from './views/VersusConfigView.vue';
 import BgmMusicView from './views/BgmMusicView.vue';
 import VoiceConfigView from './views/VoiceConfigView.vue';
 import SystemSettingsView from './views/SystemSettingsView.vue';
@@ -220,8 +228,8 @@ import ObsLiveView from './views/ObsLiveView.vue';
 import { ensureVoiceInitialized } from './voice/voiceInitialization';
 import { voiceManager } from './voice/voiceManager';
 
-type Page = 'console' | 'home' | 'connect' | 'games' | 'quiz' | 'bgm' | 'voice' | 'settings';
-const pages: Page[] = ['console', 'home', 'connect', 'games', 'quiz', 'bgm', 'voice', 'settings'];
+type Page = 'console' | 'home' | 'connect' | 'games' | 'quiz' | 'versus' | 'bgm' | 'voice' | 'settings';
+const pages: Page[] = ['console', 'home', 'connect', 'games', 'quiz', 'versus', 'bgm', 'voice', 'settings'];
 
 const requestedPage = new URLSearchParams(location.search).get('page');
 const isObsOutput = new URLSearchParams(location.search).get('output') === '1';
@@ -273,6 +281,12 @@ function go(page: Page) {
     '', 
     page === 'console' ? location.pathname : `${location.pathname}?page=${page}`
   );
+}
+
+function handleNavigate(page: string) {
+  if (pages.includes(page as Page)) {
+    go(page as Page);
+  }
 }
 
 window.addEventListener('popstate', () => {

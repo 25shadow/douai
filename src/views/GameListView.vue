@@ -162,17 +162,18 @@
 
           <div class="game-detail-info">
             <div class="game-title-row">
-              <h2>阵营对抗 (双阵营对决与拔河)</h2>
+              <h2>阵营对抗 (答题阵营对抗)</h2>
             </div>
             <p class="game-desc">
-              独立阵营对决游戏！观众在公屏发送 <b>{{ versusRuntimeSettings.redCommand }}</b> 自动加入 {{ versusRuntimeSettings.redTeamName }} 助攻，发送 <b>{{ versusRuntimeSettings.blueCommand }}</b> 加入 {{ versusRuntimeSettings.blueTeamName }} 助攻。
-              观众每次扣字都为本阵营拉扯能量拔河血条，送出礼物更可触发 {{ versusRuntimeSettings.giftMultiplier }} 倍暴击助威，直至率先达成 {{ versusRuntimeSettings.targetScore }} 分赢下对决！
+              双阵营答题对抗！观众发送 <b>{{ versusRuntimeSettings.redCommand }}</b> 加入 {{ versusRuntimeSettings.redTeamName }}，发送 <b>{{ versusRuntimeSettings.blueCommand }}</b> 加入 {{ versusRuntimeSettings.blueTeamName }}。
+              观众发送 A/B/C/D 抢答题目，答对即刻为所在阵营拉扯拔河血条！点赞可排除错误项，送礼触发 {{ versusRuntimeSettings.giftMultiplier }} 倍暴击，率先达成 {{ versusRuntimeSettings.targetScore }} 分夺魁！
             </p>
 
             <div class="feature-pills-row">
               <span class="feat-pill">🔴 发送 {{ versusRuntimeSettings.redCommand }} 加入 {{ versusRuntimeSettings.redTeamName }}</span>
               <span class="feat-pill">🔵 发送 {{ versusRuntimeSettings.blueCommand }} 加入 {{ versusRuntimeSettings.blueTeamName }}</span>
-              <span class="feat-pill">⚡ 实时对决血条</span>
+              <span class="feat-pill">⚡ 弹幕抢答 A/B/C/D 拉扯血条</span>
+              <span class="feat-pill">💖 点赞排除错误选项</span>
               <span class="feat-pill">🎁 礼物积分 {{ versusRuntimeSettings.giftMultiplier }} 倍暴击</span>
               <span class="feat-pill">🎨 4 套专属直播主题 (拔河/机甲/街机/角斗)</span>
             </div>
@@ -192,7 +193,7 @@
                 class="ctrl-btn config-btn" 
                 type="button" 
                 title="调整游戏规则与阵营"
-                @click="isVersusConfigOpen = true"
+                @click="$emit('open-versus')"
               >
                 <Sliders :size="14" />
                 <span>配置</span>
@@ -238,10 +239,10 @@
               <button 
                 class="config-action-btn" 
                 type="button" 
-                @click="isVersusConfigOpen = true"
+                @click="$emit('open-versus')"
               >
                 <Sliders :size="15" />
-                <span>游戏配置 (规则/阵营/主题)</span>
+                <span>游戏配置 (题库/阵营/规则/主题)</span>
               </button>
 
               <button 
@@ -258,18 +259,11 @@
         </div>
       </div>
     </div>
-
-    <!-- 阵营对抗独立配置弹窗 -->
-    <VersusConfigModal
-      v-if="isVersusConfigOpen"
-      @close="isVersusConfigOpen = false"
-      @start="handleStartVersus"
-    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue';
+import { computed, onMounted } from 'vue';
 import { 
   Play, Square, FastForward, Sliders, Eye 
 } from '@lucide/vue';
@@ -279,14 +273,12 @@ import {
 import { versusState, versusRuntimeSettings, startVersus, stopVersus } from '@/game/versus/versusStore';
 import { activeGameModule } from '@/game/gameRegistry';
 import { loadConfig } from '@/services/configApi';
-import VersusConfigModal from './VersusConfigModal.vue';
 
 const emit = defineEmits<{
   'open-quiz': [];
+  'open-versus': [];
   'launch-obs': [gameId?: 'quiz' | 'versus'];
 }>();
-
-const isVersusConfigOpen = ref(false);
 
 const isAnyGameRunning = computed(() => quizState.running || versusState.running);
 

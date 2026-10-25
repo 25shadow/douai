@@ -276,11 +276,11 @@ function handleStep2Click() {
 
 async function quickDemo() {
   if (simulationState.active) return;
-  await startLiveSimulation({
+  startLiveSimulation('quiz', {
     durationMinutes: 10,
     audience: 150,
     eventIntervalSeconds: 3
-  }, 'quiz');
+  });
 }
 </script>
 

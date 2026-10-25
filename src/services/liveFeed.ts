@@ -7,14 +7,16 @@ export interface LiveFeedItem {
   userAvatar?: string;
   detail: string;
   giftIcon?: string;
+  timestamp?: number;
 }
 
 export function createLiveFeedItems(messages: DyMessage[]): LiveFeedItem[] {
+  const now = Date.now();
   return messages.flatMap<LiveFeedItem>(message => {
     const userName = message.user?.name || '观众';
     const userAvatar = message.user?.avatar;
     if (message.method === 'WebcastChatMessage') {
-      return [{ id: message.id, kind: 'chat' as const, userName, userAvatar, detail: message.content || '发送了一条评论' }];
+      return [{ id: message.id, kind: 'chat' as const, userName, userAvatar, detail: message.content || '发送了一条评论', timestamp: now }];
     }
     if (message.method === 'WebcastGiftMessage') {
       const giftName = message.gift?.name || '礼物';
@@ -25,11 +27,12 @@ export function createLiveFeedItems(messages: DyMessage[]): LiveFeedItem[] {
         userName,
         userAvatar,
         detail: `送出 ${giftName} × ${count}`,
-        giftIcon: message.gift?.icon
+        giftIcon: message.gift?.icon,
+        timestamp: now
       }];
     }
     if (message.method === 'WebcastLikeMessage') {
-      return [{ id: message.id, kind: 'like' as const, userName, userAvatar, detail: message.content || '为主播点赞' }];
+      return [{ id: message.id, kind: 'like' as const, userName, userAvatar, detail: message.content || '为主播点赞', timestamp: now }];
     }
     return [];
   });
