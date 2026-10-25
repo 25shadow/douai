@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { liveState } from '@/stores/liveStore';
 import { quizProgress, quizRuntimeSettings, quizState } from '@/game/quiz/quizStore';
 import { getQuizRank, type QuizOption } from '@/game/quiz/quizRules';
@@ -88,7 +88,7 @@ const rankedPlayers = computed<DisplayRankItem[]>(() => {
       isReal: true
     }))
     .sort((a, b) => b.points - a.points || b.score - a.score)
-    .slice(0, 38)
+    .slice(0, 50)
     .map((item, idx) => ({
       ...item,
       rank: idx + 1
@@ -104,10 +104,13 @@ const topThree = computed(() => {
   };
 });
 
-// Top 3 之外的 30 名选手 (5列 × 6行 = 30格，加上冠亚季共 33 人同屏展示)
-const gridThirtyPlayers = computed(() => rankedPlayers.value.slice(3, 33));
-// 手账主题 5列 × 6行 = 30 人同屏展示
-const topThirtyPlayers = computed(() => rankedPlayers.value.slice(0, 30));
+const scrollRestPlayers = computed(() => rankedPlayers.value.slice(3));
+
+// 主题5: 底部抽屉折叠展开控制
+const drawerOpen = ref(false);
+function toggleDrawer() {
+  drawerOpen.value = !drawerOpen.value;
+}
 
 const answerStats = computed(() =>
   options.map(option => {
@@ -131,7 +134,7 @@ const answerStats = computed(() =>
 );
 
 const liveAnswerFeed = computed<DisplayAnswerItem[]>(() => {
-  return quizState.recentAnswers.slice(0, 5).map((item, idx) => ({
+  return quizState.recentAnswers.slice(0, 6).map((item, idx) => ({
     id: item.id,
     name: item.name,
     avatar: getAvatarForUser(item.name, item.avatar, idx),
@@ -139,7 +142,7 @@ const liveAnswerFeed = computed<DisplayAnswerItem[]>(() => {
     correct: item.correct,
     delta: item.delta || (item.correct ? 15 : 0),
     streak: item.streak || 1,
-    tag: item.isFirstBlood ? '首答抢答' : item.correct ? `抢答连胜×${Math.max(1, item.streak)}` : '已作答'
+    tag: item.isFirstBlood ? '首答抢答' : item.correct ? `连胜×${Math.max(1, item.streak)}` : '已作答'
   }));
 });
 
@@ -153,7 +156,7 @@ const firstBloodBanner = computed(() => {
   if (quizState.firstBlood) {
     return `🎉 @${quizState.firstBlood.name} 首答抢答成功 +${quizState.firstBlood.delta}分`;
   }
-  return '🎯 发送弹幕 A / B / C / D 参与本题抢答';
+  return '🎯 弹幕发送 A / B / C / D 参与抢答';
 });
 
 const activeGiftBanner = computed(() => {
@@ -171,7 +174,7 @@ const activeGiftBanner = computed(() => {
     userName: '礼物特权',
     giftName: '小心心 / 热气球',
     count: 1,
-    effectLabel: '送小心心自动答对 · 送热气球直通榜首',
+    effectLabel: '送小心心免淘汰 · 送热气球直通榜首',
     active: false
   };
 });
@@ -230,566 +233,623 @@ onBeforeUnmount(() => unsubscribeTheme());
     </nav>
 
     <!-- =========================================================================
-         THEME 1: 森系荣耀擂台 (arena) - 同屏展示 33 名用户 (冠亚季 3 人 + 5×6 矩阵 30 人)
+         THEME 1: 左右非对称竞技流 (arena)
+         特点: 左65%主控答题区+爆发喷射弹窗 | 右35%独立纵向滚动榜(前三名固顶+第4名起滚动)
          ========================================================================= -->
-    <div v-if="theme === 'arena'" class="layout-forest">
-      <!-- 顶部紧凑状态栏 + 礼物能量条合一 -->
-      <header class="forest-topbar">
-        <div class="forest-top-left">
-          <span class="forest-live-pill">● LIVE 🔊</span>
-          <span class="forest-bank-tag">{{ quizRuntimeSettings.bank }} · {{ quizProgress }}</span>
-        </div>
-        <div class="forest-top-right">
-          <span class="forest-gift-chip">🎁 {{ activeGiftBanner.userName }}：{{ activeGiftBanner.effectLabel }}</span>
-          <span class="forest-like-chip">❤️ {{ currentLikes }}</span>
+    <div v-if="theme === 'arena'" class="layout-asymmetric">
+      <!-- 统一显眼玩法指南横幅 -->
+      <header class="theme-gameplay-guide">
+        <div class="guide-badge">💡 玩法规则</div>
+        <div class="guide-text">
+          <span>弹幕发送 <b>A / B / C / D</b> 抢答得分</span>
+          <span class="sep">|</span>
+          <span>点赞累积满 <b>500</b> 排除错误项</span>
+          <span class="sep">|</span>
+          <span>送 <b>小心心</b> 触发免答特权</span>
         </div>
       </header>
 
-      <!-- 象牙白紧凑题卡 (内嵌题干 + 2×2选项) -->
-      <section class="forest-ivory-card">
-        <div class="ivory-card-head">
-          <span class="ivory-topic-pill">
-            <i class="topic-ring"></i>
-            <span>{{ quizRuntimeSettings.bank }}</span>
-          </span>
-          <span class="ivory-first-tag">{{ firstBloodBanner }}</span>
-          <div class="ivory-timer-pill" :class="{ urgent: displayTime <= 5 }">
-            <span>⏱ 倒计时</span>
-            <strong>{{ displayTime }}s</strong>
-          </div>
-        </div>
-
-        <h1 class="ivory-question-title">{{ quizState.question.title }}</h1>
-
-        <div class="ivory-options-grid">
-          <div
-            v-for="item in answerStats"
-            :key="item.option"
-            class="ivory-option-box"
-            :class="{
-              highlight: item.isCorrect || (!quizState.revealAnswer && item.percent >= 35),
-              wrong: item.isWrong,
-              eliminated: item.isEliminated
-            }"
-          >
-            <div class="ivory-option-fill" :style="{ width: `${item.percent}%` }"></div>
-            <div class="ivory-option-content">
-              <span class="ivory-opt-letter">{{ item.option }}</span>
-              <span class="ivory-opt-text">{{ item.text }}</span>
-              <span v-if="item.isCorrect" class="ivory-opt-tag">✓ 正确</span>
-              <span v-else-if="item.isEliminated" class="ivory-opt-tag elim">排除</span>
-              <span v-else class="ivory-opt-pct">{{ item.count ? `${item.count}人·${item.percent}%` : `${item.percent}%` }}</span>
+      <div class="asym-body">
+        <!-- 左侧 65% 主答题与互动喷射舞台 -->
+        <section class="asym-left-stage">
+          <!-- 题卡顶部状态 -->
+          <div class="asym-stage-top">
+            <div class="stage-tag-left">
+              <span class="pulse-live">● LIVE</span>
+              <span class="bank-pill">{{ quizRuntimeSettings.bank }} · 第 {{ quizProgress }} 题</span>
+            </div>
+            <div class="stage-timer-circle" :class="{ urgent: displayTime <= 5 }">
+              <span class="timer-sec">{{ displayTime }}</span>
+              <small>SEC</small>
             </div>
           </div>
-        </div>
-      </section>
 
-      <!-- 5人极速抢答连击卡横排 -->
-      <section v-if="liveAnswerFeed.length" class="forest-combo-strip">
-        <div
-          v-for="(ans, idx) in liveAnswerFeed"
-          :key="ans.id"
-          class="forest-combo-card"
-          :class="{ scored: ans.correct, first: idx === 0 }"
-        >
-          <div class="combo-card-top">
-            <img class="combo-avatar" :src="ans.avatar" alt="" />
-            <span class="combo-delta" :class="{ zero: !ans.correct }">
-              {{ ans.correct ? `+${ans.delta}` : ans.option }}
-            </span>
-          </div>
-          <strong class="combo-name">{{ ans.name }}</strong>
-          <span class="combo-tag">{{ ans.tag }}</span>
-        </div>
-      </section>
-      <div v-else class="canvas-empty-answer-strip">
-        <span>💬 暂无人作答 · 直播间发送弹幕 A / B / C / D 参与本题抢答</span>
-      </div>
-
-      <!-- 冠亚季军皇冠领奖台 + 5×6 高密度天梯网格 (仅展示真实参与观众) -->
-      <template v-if="rankedPlayers.length">
-        <section class="forest-podium-row">
-          <div v-if="topThree.second" class="podium-card silver">
-            <span class="podium-rank-num">2</span>
-            <span class="podium-streak">🔥{{ topThree.second.streak }}</span>
-            <div class="podium-avatar-wrap">
-              <span class="crown-icon">👑</span>
-              <img :src="topThree.second.avatar" alt="" />
-            </div>
-            <strong class="podium-name">{{ topThree.second.name }}</strong>
-            <div class="podium-score">{{ topThree.second.points }}<small>分</small></div>
+          <!-- 核心大题干 -->
+          <div class="asym-question-card">
+            <h1 class="asym-question-text">{{ quizState.question.title }}</h1>
           </div>
 
-          <div v-if="topThree.first" class="podium-card gold">
-            <span class="podium-rank-num">1</span>
-            <span class="podium-streak">🔥{{ topThree.first.streak }}</span>
-            <div class="podium-avatar-wrap">
-              <span class="crown-icon">👑</span>
-              <img :src="topThree.first.avatar" alt="" />
-            </div>
-            <strong class="podium-name">{{ topThree.first.name }}</strong>
-            <div class="podium-score">{{ topThree.first.points }}<small>分</small></div>
-          </div>
-
-          <div v-if="topThree.third" class="podium-card bronze">
-            <span class="podium-rank-num">3</span>
-            <span class="podium-streak">🔥{{ topThree.third.streak }}</span>
-            <div class="podium-avatar-wrap">
-              <span class="crown-icon">👑</span>
-              <img :src="topThree.third.avatar" alt="" />
-            </div>
-            <strong class="podium-name">{{ topThree.third.name }}</strong>
-            <div class="podium-score">{{ topThree.third.points }}<small>分</small></div>
-          </div>
-        </section>
-
-        <section v-if="gridThirtyPlayers.length" class="forest-matrix-grid">
-          <div v-for="player in gridThirtyPlayers" :key="player.id" class="matrix-cell">
-            <div class="cell-head">
-              <span class="cell-rank">{{ player.rank }}</span>
-              <span class="cell-streak">🔥{{ player.streak }}</span>
-            </div>
-            <img class="cell-avatar" :src="player.avatar" alt="" />
-            <span class="cell-name">{{ player.name }}</span>
-            <strong class="cell-score">{{ player.points }}<small>分</small></strong>
-          </div>
-        </section>
-      </template>
-      <section v-else class="canvas-empty-leaderboard">
-        <div class="empty-board-badge">🏆 实时积分榜</div>
-        <strong>榜首虚位以待</strong>
-        <p>在评论区发送 A / B / C / D 抢答正确，或送出礼物即可荣登榜单！</p>
-      </section>
-    </div>
-
-    <!-- =========================================================================
-         THEME 2: 手账方格闪词 (classroom) - 同屏展示 30 名用户 (5×6 紧凑白卡网格)
-         ========================================================================= -->
-    <div v-else-if="theme === 'classroom'" class="layout-notebook">
-      <header class="nb-topbar">
-        <div class="nb-brand">
-          <span class="nb-live-badge">● LIVE</span>
-          <strong class="nb-game-name">闪词大作战 · {{ quizRuntimeSettings.bank }}</strong>
-        </div>
-        <div class="nb-gift-ticker">
-          <span>❤️ {{ currentLikes }} · 🎁 {{ activeGiftBanner.userName }}：{{ activeGiftBanner.effectLabel }}</span>
-        </div>
-      </header>
-
-      <!-- 手账题面卡片 -->
-      <section class="nb-question-card">
-        <div class="nb-card-meta">
-          <span class="nb-level-badge">Lv.6 {{ quizRuntimeSettings.bank.slice(0, 4) }}</span>
-          <span class="nb-progress-text">第 {{ quizProgress }} 题</span>
-          <div class="nb-timer-circle" :class="{ urgent: displayTime <= 5 }">
-            <strong>{{ displayTime }}</strong>
-          </div>
-          <span class="nb-rule-hint">弹幕发 A / B / C / D 抢答得分...</span>
-        </div>
-
-        <h1 class="nb-question-title">
-          <span class="nb-highlighter">{{ quizState.question.title }}</span>
-        </h1>
-
-        <div class="nb-options-grid">
-          <div
-            v-for="item in answerStats"
-            :key="item.option"
-            class="nb-option-item"
-            :class="{
-              correct: item.isCorrect,
-              wrong: item.isWrong,
-              eliminated: item.isEliminated
-            }"
-          >
-            <span class="nb-opt-key">{{ item.option }}</span>
-            <span class="nb-opt-val">{{ item.text }}</span>
-            <span v-if="item.isCorrect" class="nb-opt-mark right">✓</span>
-            <span v-else-if="item.isEliminated" class="nb-opt-mark wrong">✕</span>
-            <span v-else class="nb-opt-pct">{{ item.count ? `${item.count}人(${item.percent}%)` : `${item.percent}%` }}</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- 紧凑双列实时判卷流 + 悬浮首答抢答胶囊 -->
-      <section class="nb-judge-stream">
-        <div class="nb-floating-firstblood">
-          <span>{{ firstBloodBanner }}</span>
-        </div>
-
-        <div v-if="liveAnswerFeed.length" class="nb-judge-rows">
-          <div v-for="ans in liveAnswerFeed.slice(0, 4)" :key="ans.id" class="nb-judge-row">
-            <div class="nb-row-user">
-              <img :src="ans.avatar" alt="" />
-              <strong>{{ ans.name }}</strong>
-              <span class="nb-row-opt">{{ ans.option }}</span>
-            </div>
-            <span class="nb-row-mark" :class="ans.correct ? 'ok' : 'fail'">
-              {{ ans.correct ? '✓' : '✗' }}
-            </span>
-          </div>
-        </div>
-        <div v-else class="canvas-empty-answer-strip light">
-          <span>💬 暂无人作答 · 发送弹幕 A / B / C / D 参与本题抢答</span>
-        </div>
-      </section>
-
-      <!-- 🏆 积分 TOP 30 高密度白卡方格榜 (仅展示真实参与观众) -->
-      <section class="nb-leaderboard-card">
-        <div class="nb-board-header">
-          <span class="nb-board-title">🏆 积分 TOP 30</span>
-          <span class="nb-board-meta">{{ totalParticipantCount }} 人在榜 · 弹幕抢答实时上榜</span>
-        </div>
-
-        <div v-if="topThirtyPlayers.length" class="nb-top30-grid">
-          <div
-            v-for="player in topThirtyPlayers"
-            :key="player.id"
-            class="nb-rank-cell"
-            :class="{ podium: player.rank <= 3 }"
-          >
-            <span class="nb-cell-rank" :class="`r-${player.rank}`">{{ player.rank }}</span>
-            <img class="nb-cell-avatar" :src="player.avatar" alt="" />
-            <span class="nb-cell-name">{{ player.name }}</span>
-            <strong class="nb-cell-points">{{ player.points }}</strong>
-          </div>
-        </div>
-        <div v-else class="canvas-empty-leaderboard light">
-          <div class="empty-board-badge">🏆 实时积分榜</div>
-          <strong>榜首虚位以待</strong>
-          <p>在评论区发送 A / B / C / D 抢答正确，或送出礼物即可荣登榜单！</p>
-        </div>
-      </section>
-    </div>
-
-    <!-- =========================================================================
-         THEME 3: 赛博电音派对 (neon) - 同屏展示 33 名用户 (全息三强 + 5×6 霓虹矩阵)
-         ========================================================================= -->
-    <div v-else-if="theme === 'neon'" class="layout-cyber">
-      <header class="cyber-hud-top">
-        <div class="cyber-hud-left">
-          <span class="cyber-live-tag">⚡ CYBER LIVE</span>
-          <span class="cyber-room-tag">{{ quizRuntimeSettings.bank }} · R{{ quizProgress }}</span>
-        </div>
-        <div class="cyber-hud-right">
-          <span class="cyber-energy-pill">🚀 {{ activeGiftBanner.userName }}：{{ activeGiftBanner.effectLabel }}</span>
-          <span class="cyber-players-pill">❤️ {{ currentLikes }}</span>
-        </div>
-      </header>
-
-      <!-- 全息核心题面舱 + 2×2 霓虹音轨选项 -->
-      <section class="cyber-question-cockpit">
-        <div class="cockpit-top-row">
-          <div class="cockpit-kicker">
-            <span class="neon-chip">NEON ARENA</span>
-            <span class="neon-assist">{{ firstBloodBanner }}</span>
-          </div>
-          <div class="cockpit-timer-pill" :class="{ urgent: displayTime <= 5 }">
-            <span>TIME</span>
-            <strong>{{ displayTime }}s</strong>
-          </div>
-        </div>
-
-        <h1 class="cockpit-title">{{ quizState.question.title }}</h1>
-
-        <div class="cyber-tracks-grid">
-          <div
-            v-for="item in answerStats"
-            :key="item.option"
-            class="cyber-track-row"
-            :class="[
-              `opt-${item.option}`,
-              { correct: item.isCorrect, wrong: item.isWrong, eliminated: item.isEliminated }
-            ]"
-          >
-            <div class="track-neon-bar" :style="{ width: `${item.percent}%` }"></div>
-            <div class="track-inner">
-              <span class="track-key">{{ item.option }}</span>
-              <span class="track-text">{{ item.text }}</span>
-              <strong class="track-pct">{{ item.isCorrect ? '✓ 正解' : item.isEliminated ? '已排除' : item.count ? `${item.count}人(${item.percent}%)` : `${item.percent}%` }}</strong>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- 实时 5 人全息抢答脉冲带 -->
-      <section v-if="liveAnswerFeed.length" class="cyber-avatars-strip">
-        <div v-for="ans in liveAnswerFeed" :key="ans.id" class="reactor-user-pill" :class="{ hit: ans.correct }">
-          <img :src="ans.avatar" alt="" />
-          <div class="reactor-user-meta">
-            <strong>{{ ans.name }}</strong>
-            <small>{{ ans.tag }}</small>
-          </div>
-          <b>{{ ans.correct ? `+${ans.delta}` : ans.option }}</b>
-        </div>
-      </section>
-      <div v-else class="canvas-empty-answer-strip">
-        <span>💬 暂无人作答 · 直播间发送弹幕 A / B / C / D 参与本题抢答</span>
-      </div>
-
-      <!-- 赛博三强领奖台 + 5×6 霓虹战力矩阵 (仅展示真实参与观众) -->
-      <template v-if="rankedPlayers.length">
-        <section class="cyber-podium-row">
-          <div v-if="topThree.second" class="cyber-podium-card top-2">
-            <span class="cp-rank">#2</span>
-            <img :src="topThree.second.avatar" alt="" />
-            <div class="cp-info">
-              <strong>{{ topThree.second.name }}</strong>
-              <b>{{ topThree.second.points }} <small>PTS</small></b>
-            </div>
-          </div>
-          <div v-if="topThree.first" class="cyber-podium-card top-1">
-            <span class="cp-rank">👑 #1</span>
-            <img :src="topThree.first.avatar" alt="" />
-            <div class="cp-info">
-              <strong>{{ topThree.first.name }}</strong>
-              <b>{{ topThree.first.points }} <small>PTS</small></b>
-            </div>
-          </div>
-          <div v-if="topThree.third" class="cyber-podium-card top-3">
-            <span class="cp-rank">#3</span>
-            <img :src="topThree.third.avatar" alt="" />
-            <div class="cp-info">
-              <strong>{{ topThree.third.name }}</strong>
-              <b>{{ topThree.third.points }} <small>PTS</small></b>
-            </div>
-          </div>
-        </section>
-
-        <section v-if="gridThirtyPlayers.length" class="cyber-matrix-grid">
-          <div v-for="player in gridThirtyPlayers" :key="player.id" class="cyber-cell">
-            <div class="cyber-cell-head">
-              <span class="cc-rank">#{{ player.rank }}</span>
-              <span class="cc-streak">⚡{{ player.streak }}</span>
-            </div>
-            <img class="cc-avatar" :src="player.avatar" alt="" />
-            <span class="cc-name">{{ player.name }}</span>
-            <strong class="cc-pts">{{ player.points }}</strong>
-          </div>
-        </section>
-      </template>
-      <section v-else class="canvas-empty-leaderboard">
-        <div class="empty-board-badge">⚡ 霓虹战力榜</div>
-        <strong>榜首虚位以待</strong>
-        <p>在评论区发送 A / B / C / D 抢答正确，或送出礼物即可荣登榜单！</p>
-      </section>
-    </div>
-
-    <!-- =========================================================================
-         THEME 4: 街机像素乱斗 (arcade) - 同屏展示 33 名用户 (三强街机卡 + 5×6 像素格)
-         ========================================================================= -->
-    <div v-else-if="theme === 'arcade'" class="layout-arcade">
-      <header class="arcade-score-strip">
-        <div class="arc-stat">
-          <span>1UP · R{{ quizProgress }}</span>
-          <strong>❤️ {{ currentLikes }}</strong>
-        </div>
-        <div class="arc-title-badge">🎁 {{ activeGiftBanner.userName }}：{{ activeGiftBanner.effectLabel }}</div>
-        <div class="arc-stat right">
-          <span>HI-SCORE</span>
-          <strong>{{ topThree.first?.points || 0 }}</strong>
-        </div>
-      </header>
-
-      <!-- 街机 CRT 屏幕题框 + 4色立体街机按键 -->
-      <section class="arcade-crt-monitor">
-        <div class="crt-top-row">
-          <span class="crt-stage-chip">STAGE {{ quizState.questionIndex + 1 }}</span>
-          <span class="crt-first-chip">{{ firstBloodBanner }}</span>
-          <div class="crt-timer-box" :class="{ urgent: displayTime <= 5 }">
-            TIME <b>{{ String(displayTime).padStart(2, '0') }}</b>
-          </div>
-        </div>
-
-        <h1 class="crt-question-text">{{ quizState.question.title }}</h1>
-
-        <div class="arcade-buttons-grid">
-          <div
-            v-for="item in answerStats"
-            :key="item.option"
-            class="arcade-push-btn"
-            :class="[
-              `btn-${item.option}`,
-              { correct: item.isCorrect, wrong: item.isWrong, eliminated: item.isEliminated }
-            ]"
-          >
-            <span class="arc-btn-key">{{ item.option }}</span>
-            <div class="arc-btn-body">
-              <strong>{{ item.text }}</strong>
-              <small>{{ item.isEliminated ? '已排除' : item.count ? `${item.count}人 · ${item.percent}%` : `${item.percent}% 选择` }}</small>
-            </div>
-            <span v-if="item.isCorrect" class="arc-ko-stamp">WIN!</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- 街机 5 连击横条 -->
-      <section v-if="liveAnswerFeed.length" class="arc-hit-list">
-        <div v-for="ans in liveAnswerFeed" :key="ans.id" class="arc-hit-chip" :class="{ hit: ans.correct }">
-          <img :src="ans.avatar" alt="" />
-          <div class="arc-hit-info">
-            <strong>{{ ans.name }}</strong>
-            <b>{{ ans.correct ? `HIT +${ans.delta}` : 'MISS' }}</b>
-          </div>
-        </div>
-      </section>
-      <div v-else class="canvas-empty-answer-strip">
-        <span>💬 暂无人作答 · 直播间发送弹幕 A / B / C / D 参与本题抢答</span>
-      </div>
-
-      <!-- 街机三强 + 5×6 高分名人堂 (仅展示真实参与观众) -->
-      <template v-if="rankedPlayers.length">
-        <section class="arc-podium-trio">
-          <div v-if="topThree.second" class="arc-champ-card place-2">
-            <span class="arc-place-badge">🥈 2ND</span>
-            <img :src="topThree.second.avatar" alt="" />
-            <div class="arc-champ-meta">
-              <strong>{{ topThree.second.name }}</strong>
-              <b>{{ topThree.second.points }}</b>
-            </div>
-          </div>
-          <div v-if="topThree.first" class="arc-champ-card place-1">
-            <span class="arc-place-badge">🏆 1ST</span>
-            <img :src="topThree.first.avatar" alt="" />
-            <div class="arc-champ-meta">
-              <strong>{{ topThree.first.name }}</strong>
-              <b>{{ topThree.first.points }}</b>
-            </div>
-          </div>
-          <div v-if="topThree.third" class="arc-champ-card place-3">
-            <span class="arc-place-badge">🥉 3RD</span>
-            <img :src="topThree.third.avatar" alt="" />
-            <div class="arc-champ-meta">
-              <strong>{{ topThree.third.name }}</strong>
-              <b>{{ topThree.third.points }}</b>
-            </div>
-          </div>
-        </section>
-
-        <section v-if="gridThirtyPlayers.length" class="arc-challenger-grid">
-          <div v-for="p in gridThirtyPlayers" :key="p.id" class="arc-challenger-cell">
-            <div class="arc-c-head">
-              <span class="arc-c-rank">#{{ p.rank }}</span>
-              <span class="arc-c-streak">🔥{{ p.streak }}</span>
-            </div>
-            <img :src="p.avatar" alt="" />
-            <span class="arc-c-name">{{ p.name }}</span>
-            <b class="arc-c-score">{{ p.points }}</b>
-          </div>
-        </section>
-      </template>
-      <section v-else class="canvas-empty-leaderboard">
-        <div class="empty-board-badge">🕹️ HIGH SCORES</div>
-        <strong>榜首虚位以待</strong>
-        <p>在评论区发送 A / B / C / D 抢答正确，或送出礼物即可荣登榜单！</p>
-      </section>
-    </div>
-
-    <!-- =========================================================================
-         THEME 5: 国潮金榜状元 (scroll) - 同屏展示 33 名用户 (状元榜眼探花 + 5×6 进士榜)
-         ========================================================================= -->
-    <div v-else class="layout-imperial">
-      <header class="imp-plaque-bar">
-        <span class="imp-cloud-tag">🏮 殿试 · ❤️ {{ currentLikes }}</span>
-        <strong class="imp-main-plaque">金榜题名 · {{ quizRuntimeSettings.bank }}</strong>
-        <span class="imp-round-tag">第{{ quizProgress }}题 · ⏱{{ displayTime }}s</span>
-      </header>
-
-      <!-- 宣纸圣旨卷轴题面 + 2×2 朱砂印章选项 -->
-      <section class="imp-scroll-stage">
-        <div class="scroll-roller top"></div>
-        <div class="scroll-paper-body">
-          <div class="scroll-paper-meta">
-            <span class="imp-seal-mini">【御前殿试】</span>
-            <span class="imp-first-report">{{ firstBloodBanner }}</span>
-            <span class="imp-gift-mini">👑 {{ activeGiftBanner.userName }}：{{ activeGiftBanner.effectLabel }}</span>
-          </div>
-
-          <h1 class="imp-question-title">{{ quizState.question.title }}</h1>
-
-          <div class="imp-options-grid">
+          <!-- 4 个大号选项按键 (带瞬态热度) -->
+          <div class="asym-options-grid">
             <div
               v-for="item in answerStats"
               :key="item.option"
-              class="imp-option-tablet"
-              :class="{
-                correct: item.isCorrect,
-                wrong: item.isWrong,
-                eliminated: item.isEliminated
-              }"
+              class="asym-opt-box"
+              :class="[
+                `opt-${item.option}`,
+                { correct: item.isCorrect, wrong: item.isWrong, elim: item.isEliminated }
+              ]"
             >
-              <span class="imp-seal-letter">{{ item.option }}</span>
-              <span class="imp-opt-text">{{ item.text }}</span>
-              <span v-if="item.isCorrect" class="imp-imperial-stamp">钦定正解</span>
-              <span v-else-if="item.isEliminated" class="imp-imperial-stamp">已排除</span>
-              <span v-else class="imp-opt-pct">{{ item.count ? `${item.count}人·${item.percent}%` : `${item.percent}%` }}</span>
+              <div class="opt-fill-bar" :style="{ width: `${item.percent}%` }"></div>
+              <span class="opt-key-circle">{{ item.option }}</span>
+              <span class="opt-label-text">{{ item.text }}</span>
+              <span class="opt-stat-pct">{{ item.isCorrect ? '✓ 正确' : item.isEliminated ? '排除' : `${item.percent}%` }}</span>
             </div>
           </div>
-        </div>
-        <div class="scroll-roller bottom"></div>
-      </section>
 
-      <!-- 五人抢答捷报带 -->
-      <section v-if="liveAnswerFeed.length" class="imp-answer-scroll-row">
-        <div v-for="ans in liveAnswerFeed" :key="ans.id" class="imp-scholar-pill" :class="{ pass: ans.correct }">
-          <img :src="ans.avatar" alt="" />
-          <div class="imp-scholar-meta">
-            <strong>{{ ans.name }}</strong>
-            <b>{{ ans.correct ? `高中+${ans.delta}` : `选${ans.option}` }}</b>
+          <!-- 答题爆发弹窗流 (当观众提交时瞬间向上喷射气泡) -->
+          <div class="asym-burst-wrapper">
+            <div class="burst-header">
+              <span class="burst-title">⚡ 观众抢答实况</span>
+              <span class="burst-note">{{ firstBloodBanner }}</span>
+            </div>
+            <div v-if="liveAnswerFeed.length" class="asym-burst-lane">
+              <div
+                v-for="(ans, idx) in liveAnswerFeed"
+                :key="ans.id"
+                class="asym-burst-pop"
+                :class="{ right: ans.correct, lead: idx === 0 }"
+              >
+                <img :src="ans.avatar" class="burst-avatar" alt="" />
+                <div class="burst-info">
+                  <strong>{{ ans.name }}</strong>
+                  <small>{{ ans.tag }}</small>
+                </div>
+                <div class="burst-choice" :class="{ ok: ans.correct }">
+                  {{ ans.option }}
+                </div>
+              </div>
+            </div>
+            <div v-else class="asym-burst-empty">
+              <span>💬 评论区发送 A / B / C / D，你的专属抢答弹窗将在此瞬间喷射！</span>
+            </div>
           </div>
-        </div>
-      </section>
-      <div v-else class="canvas-empty-answer-strip">
-        <span>💬 暂无人作答 · 直播间发送弹幕 A / B / C / D 参与本题殿试抢答</span>
+
+          <!-- 左侧底栏助力信息 -->
+          <footer class="asym-left-footer">
+            <div class="asym-gift-tip">🎁 {{ activeGiftBanner.userName }}：{{ activeGiftBanner.effectLabel }}</div>
+            <div class="asym-like-tip">❤️ {{ currentLikes }} 点赞</div>
+          </footer>
+        </section>
+
+        <!-- 右侧 35% 独立垂直排行榜 (前三名固顶，其余纵向滚动) -->
+        <aside class="asym-right-sidebar">
+          <div class="asym-rank-header">
+            <span class="sidebar-title">🏆 实时积分榜</span>
+            <span class="sidebar-count">{{ totalParticipantCount }}人在榜</span>
+          </div>
+
+          <div v-if="rankedPlayers.length" class="asym-rank-container">
+            <!-- 常驻固定前三名 (Top 1 / 2 / 3 永不滚出视野) -->
+            <div class="asym-fixed-top3">
+              <div v-if="topThree.first" class="top3-fixed-card gold">
+                <span class="badge-crown">👑 1</span>
+                <img :src="topThree.first.avatar" class="top3-avatar" alt="" />
+                <div class="top3-meta">
+                  <strong>{{ topThree.first.name }}</strong>
+                  <span class="pts">{{ topThree.first.points }} 分</span>
+                </div>
+              </div>
+              <div v-if="topThree.second" class="top3-fixed-card silver">
+                <span class="badge-crown">🥈 2</span>
+                <img :src="topThree.second.avatar" class="top3-avatar" alt="" />
+                <div class="top3-meta">
+                  <strong>{{ topThree.second.name }}</strong>
+                  <span class="pts">{{ topThree.second.points }} 分</span>
+                </div>
+              </div>
+              <div v-if="topThree.third" class="top3-fixed-card bronze">
+                <span class="badge-crown">🥉 3</span>
+                <img :src="topThree.third.avatar" class="top3-avatar" alt="" />
+                <div class="top3-meta">
+                  <strong>{{ topThree.third.name }}</strong>
+                  <span class="pts">{{ topThree.third.points }} 分</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 第 4~50 名平滑纵向无限滚动轨道 -->
+            <div class="asym-scroll-section">
+              <div class="scroll-ticker-track" :class="{ animate: scrollRestPlayers.length > 5 }">
+                <div
+                  v-for="p in scrollRestPlayers"
+                  :key="p.id"
+                  class="asym-ticker-item"
+                >
+                  <span class="ticker-rank">{{ p.rank }}</span>
+                  <img :src="p.avatar" class="ticker-avatar" alt="" />
+                  <span class="ticker-name">{{ p.name }}</span>
+                  <strong class="ticker-pts">{{ p.points }}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="asym-rank-empty">
+            <div class="empty-icon-trophy">🏆</div>
+            <strong>榜首虚位以待</strong>
+            <p>在评论区发送 A/B/C/D 抢答或送出礼物，即可立即荣登右侧榜首！</p>
+          </div>
+        </aside>
       </div>
+    </div>
 
-      <!-- 状元 / 榜眼 / 探花 三甲牌匾 + 5×6 进士金榜网格 (仅展示真实参与观众) -->
-      <template v-if="rankedPlayers.length">
-        <section class="imp-trio-plaques">
-          <div v-if="topThree.second" class="imp-trio-card second">
-            <span class="imp-trio-title">🥈 榜眼</span>
-            <img :src="topThree.second.avatar" alt="" />
-            <div class="imp-trio-info">
-              <strong>{{ topThree.second.name }}</strong>
-              <b>{{ topThree.second.points }}分</b>
+    <!-- =========================================================================
+         THEME 2: 三段式手账闪词流 (classroom)
+         特点: 顶部大题卡 | 中部实时判卷气泡瀑布 | 底部横向滑动画廊卡片榜
+         ========================================================================= -->
+    <div v-else-if="theme === 'classroom'" class="layout-notebook-tier">
+      <!-- 统一显眼玩法指南横幅 -->
+      <header class="theme-gameplay-guide light-guide">
+        <div class="guide-badge">📖 答题攻略</div>
+        <div class="guide-text">
+          <span>直接在公屏打出 <b>A / B / C / D</b></span>
+          <span class="sep">|</span>
+          <span>系统极速识别判题</span>
+          <span class="sep">|</span>
+          <span>答对进入底部<b>拍立得学员画廊</b></span>
+        </div>
+      </header>
+
+      <!-- 顶段 42% 居中沉浸手账白卡 -->
+      <section class="nb-tier-top-card">
+        <div class="nb-paper-head">
+          <span class="nb-tag-round">第 {{ quizProgress }} 题 · {{ quizRuntimeSettings.bank }}</span>
+          <div class="nb-time-clock" :class="{ urgent: displayTime <= 5 }">
+            <span class="clock-icon">⏳</span>
+            <strong>{{ displayTime }}s</strong>
+          </div>
+        </div>
+
+        <h1 class="nb-card-title">
+          <span class="nb-mark-pen">{{ quizState.question.title }}</span>
+        </h1>
+
+        <div class="nb-choices-2x2">
+          <div
+            v-for="item in answerStats"
+            :key="item.option"
+            class="nb-choice-cell"
+            :class="{ ok: item.isCorrect, err: item.isWrong, elim: item.isEliminated }"
+          >
+            <span class="nb-choice-letter">{{ item.option }}</span>
+            <span class="nb-choice-label">{{ item.text }}</span>
+            <span v-if="item.isCorrect" class="nb-choice-mark green">✓ 正解</span>
+            <span v-else-if="item.isEliminated" class="nb-choice-mark red">✕ 排除</span>
+            <span v-else class="nb-choice-pct">{{ item.percent }}%</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 中段 24% 答题瞬时判卷气泡瀑布 (张三 选了 C ✓ 瞬间弹出) -->
+      <section class="nb-tier-mid-waterfall">
+        <div class="waterfall-title-strip">
+          <span class="wf-badge">📝 即时卷面实况</span>
+          <span class="wf-lead">{{ firstBloodBanner }}</span>
+        </div>
+
+        <div v-if="liveAnswerFeed.length" class="waterfall-bubble-grid">
+          <div
+            v-for="ans in liveAnswerFeed"
+            :key="ans.id"
+            class="wf-stamp-bubble"
+            :class="{ pass: ans.correct }"
+          >
+            <img :src="ans.avatar" class="wf-avatar" alt="" />
+            <div class="wf-info">
+              <strong>{{ ans.name }}</strong>
+              <small>{{ ans.tag }}</small>
+            </div>
+            <div class="wf-result-stamp">
+              <span class="wf-choice-pill">选 {{ ans.option }}</span>
+              <b class="wf-mark">{{ ans.correct ? '✓ 答对' : '✗ 答错' }}</b>
+            </div>
+          </div>
+        </div>
+        <div v-else class="waterfall-empty-box">
+          <span>💬 发送选项 A / B / C / D，你的答题卷纸将在此瞬间“啪”地盖章弹出！</span>
+        </div>
+      </section>
+
+      <!-- 底段 34% 横向滑动画廊榜 (Carousel 画廊卡片) -->
+      <section class="nb-tier-bottom-gallery">
+        <div class="gallery-title-bar">
+          <div class="gallery-title">
+            <span>🖼️ 学霸拍立得画廊</span>
+            <small>横向滑动查看全部上榜席位</small>
+          </div>
+          <span class="gallery-counter">{{ totalParticipantCount }} 人入驻画廊</span>
+        </div>
+
+        <div v-if="rankedPlayers.length" class="gallery-cards-track">
+          <div
+            v-for="p in rankedPlayers"
+            :key="p.id"
+            class="gallery-polaroid-card"
+            :class="{ champion: p.rank === 1, podium: p.rank <= 3 }"
+          >
+            <div class="polaroid-photo">
+              <span class="polaroid-rank-badge">#{{ p.rank }}</span>
+              <img :src="p.avatar" alt="" />
+            </div>
+            <div class="polaroid-footer">
+              <strong class="polaroid-name">{{ p.name }}</strong>
+              <span class="polaroid-score">{{ p.points }} 分</span>
+            </div>
+          </div>
+        </div>
+        <div v-else class="gallery-empty-state">
+          <span class="empty-polaroid-icon">📷</span>
+          <strong>画廊虚位以待</strong>
+          <p>在评论区发送答案或点赞送礼，即可获得专属拍立得学霸卡并在底部轮播展出！</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- =========================================================================
+         THEME 3: 赛博中心辐射流 (neon)
+         特点: 中央全息能量环与题卡 | 4个选项呈环抱辐射槽 | 底部扇形光柱战力台
+         ========================================================================= -->
+    <div v-else-if="theme === 'neon'" class="layout-radial-cyber">
+      <!-- 统一显眼玩法指南横幅 -->
+      <header class="theme-gameplay-guide cyber-guide">
+        <div class="guide-badge">⚡ CYBER 规则</div>
+        <div class="guide-text">
+          <span>终端键入 <b>A / B / C / D</b> 为能量槽注入指令</span>
+          <span class="sep">|</span>
+          <span>点赞累积光子激活排除力场</span>
+          <span class="sep">|</span>
+          <span>登顶扇形战力塔</span>
+        </div>
+      </header>
+
+      <!-- 上半部 60% 辐射式核心控制舱 -->
+      <section class="cyber-radial-cockpit">
+        <!-- 顶栏状态 -->
+        <div class="cockpit-hud-bar">
+          <span class="hud-status-blink">SYS: ONLINE · R{{ quizProgress }}</span>
+          <span class="hud-center-bank">{{ quizRuntimeSettings.bank }}</span>
+          <span class="hud-likes-chip">❤️ {{ currentLikes }} PHOTONS</span>
+        </div>
+
+        <!-- 辐射主舞台 (中央环形能量核心 + 选项四向环抱) -->
+        <div class="radial-stage-container">
+          <!-- 核心圆形舱 -->
+          <div class="radial-center-core">
+            <div class="core-countdown-ring">
+              <svg class="ring-svg" viewBox="0 0 160 160">
+                <circle cx="80" cy="80" r="70" class="ring-bg" />
+                <circle cx="80" cy="80" r="70" class="ring-pulse" />
+              </svg>
+              <div class="core-time-number" :class="{ urgent: displayTime <= 5 }">
+                <strong>{{ displayTime }}</strong>
+                <small>SEC</small>
+              </div>
+            </div>
+            <div class="core-question-display">
+              <h1 class="core-q-title">{{ quizState.question.title }}</h1>
             </div>
           </div>
 
-          <div v-if="topThree.first" class="imp-trio-card first">
-            <span class="imp-trio-title">👑 状元</span>
-            <img :src="topThree.first.avatar" alt="" />
-            <div class="imp-trio-info">
-              <strong>{{ topThree.first.name }}</strong>
-              <b>{{ topThree.first.points }}分</b>
+          <!-- 四向辐射按键通道 (左上A、右上B、左下C、右下D) -->
+          <div class="radial-wings-grid">
+            <div
+              v-for="item in answerStats"
+              :key="item.option"
+              class="radial-wing-channel"
+              :class="[
+                `wing-${item.option}`,
+                { correct: item.isCorrect, wrong: item.isWrong, elim: item.isEliminated }
+              ]"
+            >
+              <div class="wing-fill-plasma" :style="{ height: `${item.percent}%` }"></div>
+              <div class="wing-content">
+                <span class="wing-letter">{{ item.option }}</span>
+                <span class="wing-text">{{ item.text }}</span>
+                <b class="wing-stat">{{ item.isCorrect ? '✓ 正解' : item.isEliminated ? 'OFF' : `${item.percent}%` }}</b>
+              </div>
             </div>
           </div>
+        </div>
 
-          <div v-if="topThree.third" class="imp-trio-card third">
-            <span class="imp-trio-title">🥉 探花</span>
-            <img :src="topThree.third.avatar" alt="" />
-            <div class="imp-trio-info">
-              <strong>{{ topThree.third.name }}</strong>
-              <b>{{ topThree.third.points }}分</b>
+        <!-- 全息粒子弹窗流 (观众答题瞬发能量脉冲) -->
+        <div class="cyber-pulse-stream">
+          <div v-if="liveAnswerFeed.length" class="pulse-capsules-row">
+            <div
+              v-for="ans in liveAnswerFeed.slice(0, 5)"
+              :key="ans.id"
+              class="pulse-user-pill"
+              :class="{ beam: ans.correct }"
+            >
+              <img :src="ans.avatar" class="pill-avatar" alt="" />
+              <span class="pill-name">{{ ans.name }}</span>
+              <span class="pill-ch">注入 {{ ans.option }}</span>
+              <b class="pill-hit">{{ ans.correct ? `+${ans.delta}` : 'MIS' }}</b>
             </div>
           </div>
-        </section>
+          <div v-else class="pulse-empty-bar">
+            <span>⚡ 指令待命：评论区发送 A / B / C / D，粒子流将瞬间充能对应能量槽</span>
+          </div>
+        </div>
+      </section>
 
-        <section v-if="gridThirtyPlayers.length" class="imp-jinshi-grid">
-          <div v-for="p in gridThirtyPlayers" :key="p.id" class="imp-jinshi-cell">
-            <div class="jinshi-cell-head">
-              <span class="jinshi-rank">{{ p.rank }}名</span>
-              <span class="jinshi-streak">🔥{{ p.streak }}</span>
+      <!-- 下半部 40% 扇形全息仪表战力台 (弧形高低柱体，前三名投影光柱居中拔高) -->
+      <section class="cyber-fan-dashboard">
+        <div class="fan-header">
+          <span class="fan-title">🌐 扇形战力核心矩阵</span>
+          <span class="fan-tip">{{ activeGiftBanner.userName }}：{{ activeGiftBanner.effectLabel }}</span>
+        </div>
+
+        <div v-if="rankedPlayers.length" class="fan-podium-stage">
+          <!-- 扇形战力柱体群 (前三名拔高，其余弧形分布) -->
+          <div class="fan-pillars-layout">
+            <div
+              v-for="p in rankedPlayers.slice(0, 11)"
+              :key="p.id"
+              class="fan-pillar-cell"
+              :class="`rank-col-${p.rank}`"
+            >
+              <div class="pillar-avatar-holo">
+                <span v-if="p.rank === 1" class="holo-crown">👑 #1</span>
+                <span v-else class="holo-num">#{{ p.rank }}</span>
+                <img :src="p.avatar" alt="" />
+              </div>
+              <div class="pillar-beam-bar" :style="{ height: `${Math.max(40, 200 - (p.rank - 1) * 16)}px` }"></div>
+              <span class="pillar-name">{{ p.name }}</span>
+              <strong class="pillar-pts">{{ p.points }}</strong>
             </div>
-            <img :src="p.avatar" alt="" />
-            <strong class="jinshi-name">{{ p.name }}</strong>
-            <b class="jinshi-pts">{{ p.points }}<small>分</small></b>
           </div>
-        </section>
-      </template>
-      <section v-else class="canvas-empty-leaderboard">
-        <div class="empty-board-badge">🏮 皇榜金科</div>
-        <strong>状元虚位以待</strong>
-        <p>在评论区发送 A / B / C / D 抢答正确，或送出礼物即可金榜题名！</p>
+        </div>
+
+        <div v-else class="fan-empty-state">
+          <span class="fan-radar-icon">📡</span>
+          <strong>战力矩阵虚位以待</strong>
+          <p>发送 A/B/C/D 抢答或送出热气球，全息光柱将拔地而起并为您投影战力指数！</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- =========================================================================
+         THEME 4: 街机四色名人堂流 (arcade)
+         特点: 顶部通关星级 | 中央4色大按键(HIT暴击动效) | 底部像素高分名人堂
+         ========================================================================= -->
+    <div v-else-if="theme === 'arcade'" class="layout-arcade-hall">
+      <!-- 统一显眼玩法指南横幅 -->
+      <header class="theme-gameplay-guide arcade-guide">
+        <div class="guide-badge">🕹️ 街机规则</div>
+        <div class="guide-text">
+          <span>公屏发送 <b>A / B / C / D</b> 敲击按键</span>
+          <span class="sep">|</span>
+          <span>极速答对触发 <b>HIT 暴击分数</b></span>
+          <span class="sep">|</span>
+          <span>登上底部<b>街机名人堂</b></span>
+        </div>
+      </header>
+
+      <!-- 顶段 20% 街机通关积分条 -->
+      <section class="arcade-stage-header">
+        <div class="arcade-stage-meta">
+          <span class="arcade-coin-tag">🪙 1UP · STAGE {{ quizState.questionIndex + 1 }}</span>
+          <span class="arcade-bank-tag">{{ quizRuntimeSettings.bank }} · 第{{ quizProgress }}题</span>
+        </div>
+        <div class="arcade-timer-badge" :class="{ urgent: displayTime <= 5 }">
+          <span>TIME</span>
+          <strong>{{ displayTime }}</strong>
+        </div>
+      </section>
+
+      <!-- 中段 45% 街机 4 色立体大按键 (HIT 暴击弹窗) -->
+      <section class="arcade-crt-console">
+        <h1 class="crt-question-heading">{{ quizState.question.title }}</h1>
+
+        <div class="crt-buttons-4col">
+          <div
+            v-for="item in answerStats"
+            :key="item.option"
+            class="arcade-3d-btn"
+            :class="[
+              `btn-color-${item.option}`,
+              { correct: item.isCorrect, wrong: item.isWrong, elim: item.isEliminated }
+            ]"
+          >
+            <div class="btn-top-cap">
+              <span class="btn-key">{{ item.option }}</span>
+              <span class="btn-text">{{ item.text }}</span>
+              <span class="btn-stat">{{ item.isCorrect ? 'WIN!' : item.isEliminated ? 'OUT' : `${item.percent}%` }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 击打连击瞬时暴击弹窗 -->
+        <div class="crt-hit-combo-bar">
+          <div v-if="liveAnswerFeed.length" class="hit-chips-list">
+            <div
+              v-for="ans in liveAnswerFeed.slice(0, 4)"
+              :key="ans.id"
+              class="hit-chip-pop"
+              :class="{ critical: ans.correct }"
+            >
+              <img :src="ans.avatar" class="hit-av" alt="" />
+              <div class="hit-info">
+                <strong>{{ ans.name }}</strong>
+                <small>{{ ans.tag }}</small>
+              </div>
+              <b class="hit-damage">{{ ans.correct ? `HIT +${ans.delta}` : `MISS ${ans.option}` }}</b>
+            </div>
+          </div>
+          <div v-else class="hit-empty-text">
+            <span>💥 敲击弹幕发送 A / B / C / D，按键下陷并产生 HIT 暴击伤害！</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 底段 35% 像素高分名人堂 (TOP 1/2/3 像素奖杯 + 其余高分网格) -->
+      <section class="arcade-hall-fame-bottom">
+        <div class="hall-header">
+          <span class="hall-title">🏆 街机 HIGH SCORES 名人堂</span>
+          <span class="hall-meta">{{ totalParticipantCount }} 位玩家在榜</span>
+        </div>
+
+        <div v-if="rankedPlayers.length" class="hall-players-grid">
+          <div
+            v-for="p in rankedPlayers.slice(0, 12)"
+            :key="p.id"
+            class="hall-cell"
+            :class="{ top1: p.rank === 1, top3: p.rank <= 3 }"
+          >
+            <div class="hall-cell-head">
+              <span class="hall-rank">{{ p.rank === 1 ? '👑 1ST' : p.rank === 2 ? '🥈 2ND' : p.rank === 3 ? '🥉 3RD' : `#${p.rank}` }}</span>
+              <span class="hall-streak">🔥{{ p.streak }}</span>
+            </div>
+            <img :src="p.avatar" class="hall-avatar" alt="" />
+            <span class="hall-name">{{ p.name }}</span>
+            <strong class="hall-pts">{{ p.points }} <small>PTS</small></strong>
+          </div>
+        </div>
+        <div v-else class="hall-empty-state">
+          <div class="hall-empty-icon">🕹️</div>
+          <strong>名人堂虚位以待</strong>
+          <p>公屏发送 A/B/C/D 抢答得分，冲击今日最高分并载入名人堂！</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- =========================================================================
+         THEME 5: 全屏沉浸大舞台 + 底部悬浮折叠金榜抽屉 (scroll)
+         特点: 75%全屏大舞台圣旨题面 | 弹幕穿梭悬浮气泡 | 底部可展开折叠抽屉金榜
+         ========================================================================= -->
+    <div v-else class="layout-immersive-scroll">
+      <!-- 统一显眼玩法指南横幅 -->
+      <header class="theme-gameplay-guide imperial-guide">
+        <div class="guide-badge">🏮 殿试试题</div>
+        <div class="guide-text">
+          <span>公屏进言 <b>A / B / C / D</b> 应试夺魁</span>
+          <span class="sep">|</span>
+          <span>点赞积攒功名福泽</span>
+          <span class="sep">|</span>
+          <span>轻触或点击底部<b>金科皇榜抽屉</b>查阅榜单</span>
+        </div>
+      </header>
+
+      <!-- 75% 沉浸全屏圣旨题卡大舞台 -->
+      <section class="imperial-hero-scroll">
+        <div class="imperial-plaque-top">
+          <span class="plaque-tag">🏮 御前殿试 · 第 {{ quizProgress }} 题</span>
+          <div class="plaque-timer" :class="{ urgent: displayTime <= 5 }">
+            <span>⏱ 钦定时刻</span>
+            <strong>{{ displayTime }}s</strong>
+          </div>
+        </div>
+
+        <!-- 圣旨卷轴展开题干 -->
+        <div class="scroll-canvas-body">
+          <div class="scroll-seal-mark">【殿试】</div>
+          <h1 class="scroll-hero-title">{{ quizState.question.title }}</h1>
+        </div>
+
+        <!-- 四柱御批印章大按键 -->
+        <div class="scroll-tablets-grid">
+          <div
+            v-for="item in answerStats"
+            :key="item.option"
+            class="imperial-tablet-btn"
+            :class="{ ok: item.isCorrect, err: item.isWrong, elim: item.isEliminated }"
+          >
+            <span class="tablet-seal">{{ item.option }}</span>
+            <span class="tablet-text">{{ item.text }}</span>
+            <b class="tablet-state">{{ item.isCorrect ? '钦定正解' : item.isEliminated ? '黜退' : `${item.percent}%` }}</b>
+          </div>
+        </div>
+
+        <!-- 悬浮弹幕飞掠答题气泡 (观众作答穿梭在卷轴之下) -->
+        <div class="scroll-danmaku-stream">
+          <div v-if="liveAnswerFeed.length" class="danmaku-fly-lane">
+            <div
+              v-for="ans in liveAnswerFeed"
+              :key="ans.id"
+              class="danmaku-scholar-tag"
+              :class="{ pass: ans.correct }"
+            >
+              <img :src="ans.avatar" alt="" />
+              <span>{{ ans.name }}</span>
+              <b>选 {{ ans.option }}</b>
+              <small>{{ ans.correct ? '高中' : '惜败' }}</small>
+            </div>
+          </div>
+          <div v-else class="danmaku-empty-hint">
+            <span>🏮 发送 A / B / C / D，您的进言将化作金色捷报在卷轴上穿梭！</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 底部悬浮抽屉式折叠金榜 (平时为精美浮动条，点击可滑动展开全宽金榜) -->
+      <section class="imperial-bottom-drawer" :class="{ expanded: drawerOpen }">
+        <!-- 抽屉头部触发开关条 -->
+        <div class="drawer-trigger-bar" @click="toggleDrawer">
+          <div class="drawer-left">
+            <span class="drawer-badge">📜 金科皇榜</span>
+            <span class="drawer-summary">
+              {{ topThree.first ? `状元: ${topThree.first.name} (${topThree.first.points}分)` : '状元虚位以待' }}
+            </span>
+          </div>
+          <div class="drawer-right">
+            <span>{{ drawerOpen ? '▼ 收起金榜' : '▲ 展开查阅全榜' }}</span>
+            <small>{{ totalParticipantCount }} 人在册</small>
+          </div>
+        </div>
+
+        <!-- 抽屉展开内容：状元/榜眼/探花三甲金匾 + 进士列榜 -->
+        <div class="drawer-content-body">
+          <div v-if="rankedPlayers.length" class="drawer-palace-board">
+            <div class="drawer-trio-plaques">
+              <div v-if="topThree.second" class="drawer-card second">
+                <span>🥈 榜眼</span>
+                <img :src="topThree.second.avatar" alt="" />
+                <strong>{{ topThree.second.name }}</strong>
+                <b>{{ topThree.second.points }}分</b>
+              </div>
+              <div v-if="topThree.first" class="drawer-card first">
+                <span>👑 状元</span>
+                <img :src="topThree.first.avatar" alt="" />
+                <strong>{{ topThree.first.name }}</strong>
+                <b>{{ topThree.first.points }}分</b>
+              </div>
+              <div v-if="topThree.third" class="drawer-card third">
+                <span>🥉 探花</span>
+                <img :src="topThree.third.avatar" alt="" />
+                <strong>{{ topThree.third.name }}</strong>
+                <b>{{ topThree.third.points }}分</b>
+              </div>
+            </div>
+
+            <div v-if="scrollRestPlayers.length" class="drawer-jinshi-scroll">
+              <div
+                v-for="p in scrollRestPlayers.slice(0, 20)"
+                :key="p.id"
+                class="drawer-jinshi-row"
+              >
+                <span class="j-rank">第{{ p.rank }}名</span>
+                <img :src="p.avatar" alt="" />
+                <span class="j-name">{{ p.name }}</span>
+                <strong class="j-pts">{{ p.points }}分</strong>
+              </div>
+            </div>
+          </div>
+          <div v-else class="drawer-empty-state">
+            <strong>状元榜眼探花虚位以待</strong>
+            <p>公屏发送答案抢答或点赞送礼，即可位列金科皇榜！</p>
+          </div>
+        </div>
       </section>
     </div>
   </main>
@@ -797,7 +857,7 @@ onBeforeUnmount(() => unsubscribeTheme());
 
 <style scoped>
 /* ============================================================================
-   1080 × 1920 竖屏移动端黄金比例画布 (高密度 30~33 人同屏榜单，零底部空白)
+   1080 × 1920 竖屏移动端黄金比例画布
    ============================================================================ */
 .broadcast-canvas {
   position: relative;
@@ -809,1988 +869,1851 @@ onBeforeUnmount(() => unsubscribeTheme());
   font-family: 'Douyin Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
+/* 顶部悬浮切换胶囊 */
 .preview-theme-switcher {
   position: absolute;
-  top: 10px;
+  top: 14px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 60;
+  z-index: 100;
   display: flex;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.88);
+  background: rgba(15, 23, 42, 0.9);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   opacity: 0;
   transition: opacity 0.2s ease;
 }
-
 .broadcast-canvas:hover .preview-theme-switcher {
   opacity: 1;
 }
-
 .switcher-pill {
-  padding: 5px 14px;
+  padding: 6px 14px;
   border-radius: 999px;
   border: 0;
   background: transparent;
   color: #cbd5e1;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
 }
-
 .switcher-pill.active {
   background: #10b981;
   color: #ffffff;
 }
 
-/* ============================================================================
-   THEME 1: 森系荣耀擂台 (layout-forest)
-   ============================================================================ */
-.layout-forest {
+/* 统一显眼玩法指南横幅 (置顶、不挡题、指引明确) */
+.theme-gameplay-guide {
   width: 100%;
-  height: 100%;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 0 32px;
   box-sizing: border-box;
-  padding: 16px 22px 10px;
-  background: radial-gradient(circle at 50% 15%, #1d3c37 0%, #132a26 55%, #0c1b18 100%);
-  color: #f8fafc;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  z-index: 20;
 }
-
-.forest-topbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.forest-top-left,
-.forest-top-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.forest-live-pill {
-  padding: 4px 12px;
+.guide-badge {
+  padding: 6px 16px;
   border-radius: 999px;
-  background: rgba(239, 68, 68, 0.24);
-  border: 1px solid rgba(248, 113, 113, 0.45);
-  color: #fca5a5;
-  font-size: 17px;
+  background: #10b981;
+  color: #ffffff;
+  font-size: 20px;
   font-weight: 800;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
 }
-
-.forest-bank-tag,
-.forest-like-chip {
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  font-size: 17px;
-  font-weight: 700;
+.guide-text {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 22px;
+  font-weight: 600;
   color: #e2e8f0;
-}
-
-.forest-gift-chip {
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: rgba(180, 83, 9, 0.35);
-  border: 1px solid rgba(251, 191, 36, 0.45);
-  font-size: 16px;
-  font-weight: 700;
-  color: #fde68a;
-  max-width: 460px;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+.guide-text b {
+  color: #fbbf24;
+}
+.guide-text .sep {
+  color: rgba(255, 255, 255, 0.3);
 }
 
-.forest-ivory-card {
-  background: linear-gradient(180deg, #fafaf7 0%, #efefea 100%);
-  border-radius: 24px;
-  padding: 16px 22px 18px;
+.theme-gameplay-guide.light-guide {
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 2px solid #e2e8f0;
   color: #1e293b;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3), inset 0 2px 0 #ffffff;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  flex-shrink: 0;
+}
+.theme-gameplay-guide.light-guide .guide-badge {
+  background: #0284c7;
+}
+.theme-gameplay-guide.light-guide .guide-text {
+  color: #334155;
+}
+.theme-gameplay-guide.light-guide .guide-text b {
+  color: #0284c7;
 }
 
-.ivory-card-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
+.theme-gameplay-guide.cyber-guide {
+  background: rgba(10, 10, 26, 0.9);
+  border-bottom: 2px solid #06b6d4;
+}
+.theme-gameplay-guide.cyber-guide .guide-badge {
+  background: #06b6d4;
+  color: #020617;
+}
+.theme-gameplay-guide.cyber-guide .guide-text b {
+  color: #38bdf8;
 }
 
-.ivory-topic-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 14px;
-  border-radius: 999px;
-  background: #3d634d;
-  color: #ffffff;
-  font-size: 17px;
-  font-weight: 800;
+.theme-gameplay-guide.arcade-guide {
+  background: #18181b;
+  border-bottom: 3px solid #e11d48;
+}
+.theme-gameplay-guide.arcade-guide .guide-badge {
+  background: #e11d48;
+}
+.theme-gameplay-guide.arcade-guide .guide-text b {
+  color: #f43f5e;
 }
 
-.topic-ring {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 2.5px solid #a7f3d0;
+.theme-gameplay-guide.imperial-guide {
+  background: #2b110a;
+  border-bottom: 2px solid #b45309;
 }
-
-.ivory-first-tag {
-  font-size: 17px;
-  font-weight: 800;
-  color: #047857;
-  background: #d1fae5;
-  padding: 4px 14px;
-  border-radius: 999px;
-}
-
-.ivory-timer-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 14px;
-  border-radius: 999px;
-  background: #e2e8f0;
-  color: #1e293b;
-  font-size: 18px;
-  font-weight: 800;
-}
-
-.ivory-timer-pill.urgent {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.ivory-question-title {
-  margin: 0;
-  font-size: 40px;
-  font-weight: 900;
-  color: #1e293b;
-  line-height: 1.2;
-  text-align: center;
-}
-
-.ivory-options-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-
-.ivory-option-box {
-  position: relative;
-  overflow: hidden;
-  border-radius: 14px;
-  background: #f8fafc;
-  border: 2px solid #cbd5e1;
-  padding: 12px 16px;
-}
-
-.ivory-option-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  background: rgba(148, 163, 184, 0.16);
-}
-
-.ivory-option-box.highlight {
-  border-color: #b45309;
-  background: #fef3c7;
-}
-
-.ivory-option-box.highlight .ivory-option-fill {
-  background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%);
-  opacity: 0.78;
-}
-
-.ivory-option-box.eliminated {
-  opacity: 0.45;
-  text-decoration: line-through;
-}
-
-.ivory-option-content {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.ivory-opt-letter {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  background: #cbd5e1;
-  color: #1e293b;
-  display: grid;
-  place-items: center;
-  font-size: 20px;
-  font-weight: 900;
-  flex-shrink: 0;
-}
-
-.ivory-option-box.highlight .ivory-opt-letter {
+.theme-gameplay-guide.imperial-guide .guide-badge {
   background: #b45309;
-  color: #ffffff;
 }
-
-.ivory-opt-text {
-  font-size: 23px;
-  font-weight: 800;
-  color: #1e293b;
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ivory-opt-tag {
-  padding: 2px 8px;
-  border-radius: 6px;
-  background: #15803d;
-  color: #ffffff;
-  font-size: 15px;
-  font-weight: 800;
-}
-
-.ivory-opt-tag.elim {
-  background: #dc2626;
-}
-
-.ivory-opt-pct {
-  font-size: 16px;
-  font-weight: 800;
-  color: #475569;
-  flex-shrink: 0;
-}
-
-/* 5人极速抢答连击卡 */
-.forest-combo-strip {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.forest-combo-card {
-  background: rgba(20, 48, 43, 0.9);
-  border: 1.5px solid rgba(94, 234, 212, 0.22);
-  border-radius: 14px;
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.forest-combo-card.scored {
-  background: linear-gradient(160deg, #1d4d3e 0%, #15382e 100%);
-  border-color: #34d399;
-}
-
-.forest-combo-card.first {
-  border-color: #fbbf24;
-}
-
-.combo-card-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.combo-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 1.5px solid rgba(255, 255, 255, 0.45);
-}
-
-.combo-delta {
-  font-size: 20px;
-  font-weight: 900;
+.theme-gameplay-guide.imperial-guide .guide-text b {
   color: #fde047;
 }
 
-.combo-delta.zero {
-  color: #94a3b8;
-}
-
-.combo-name {
-  font-size: 16px;
-  font-weight: 800;
+/* ============================================================================
+   THEME 1: 左右非对称竞技流 (layout-asymmetric)
+   左65%主交互区 + 右35%独立垂直滚动排行榜
+   ============================================================================ */
+.layout-asymmetric {
+  width: 1080px;
+  height: 1920px;
+  background: radial-gradient(circle at 30% 20%, #1e3a34 0%, #091a16 60%, #030a08 100%);
   color: #ffffff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: flex;
+  flex-direction: column;
+}
+.asym-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  padding: 24px 28px 28px;
+  gap: 24px;
+  box-sizing: border-box;
 }
 
-.combo-tag {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: rgba(245, 158, 11, 0.24);
-  color: #fcd34d;
-  font-size: 12px;
+/* 左侧 65% 主舞台 */
+.asym-left-stage {
+  flex: 0 0 648px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+}
+.asym-stage-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.stage-tag-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.pulse-live {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid #10b981;
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 20px;
+  font-weight: 800;
+}
+.bank-pill {
+  font-size: 24px;
+  color: #cbd5e1;
   font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-
-/* 冠亚季军皇冠领奖台 (紧凑高度) */
-.forest-podium-row {
-  display: grid;
-  grid-template-columns: 1fr 1.12fr 1fr;
-  gap: 10px;
-  align-items: stretch;
-  flex-shrink: 0;
-}
-
-.podium-card {
-  position: relative;
-  border-radius: 16px;
-  padding: 10px 12px 8px;
+.stage-timer-circle {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  background: #112822;
+  border: 4px solid #10b981;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  border: 2px solid rgba(255, 255, 255, 0.22);
-}
-
-.podium-card.silver {
-  background: linear-gradient(180deg, rgba(71, 117, 135, 0.78) 0%, rgba(36, 68, 82, 0.92) 100%);
-  border-color: #93c5fd;
-}
-
-.podium-card.gold {
-  background: linear-gradient(180deg, rgba(161, 128, 52, 0.88) 0%, rgba(92, 74, 28, 0.95) 100%);
-  border-color: #fde047;
-  box-shadow: 0 6px 20px rgba(250, 204, 21, 0.22);
-}
-
-.podium-card.bronze {
-  background: linear-gradient(180deg, rgba(133, 88, 66, 0.82) 0%, rgba(79, 49, 36, 0.92) 100%);
-  border-color: #fdba74;
-}
-
-.podium-rank-num {
-  position: absolute;
-  top: 6px;
-  left: 12px;
-  font-size: 22px;
-  font-weight: 900;
-  color: rgba(255, 255, 255, 0.92);
-}
-
-.podium-streak {
-  position: absolute;
-  top: 8px;
-  right: 12px;
-  font-size: 15px;
-  font-weight: 800;
-  color: #fde68a;
-}
-
-.podium-avatar-wrap {
-  position: relative;
-  margin-top: 4px;
-}
-
-.podium-avatar-wrap img {
-  width: 62px;
-  height: 62px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2.5px solid #ffffff;
-}
-
-.podium-card.gold .podium-avatar-wrap img {
-  width: 68px;
-  height: 68px;
-  border-color: #fde047;
-}
-
-.crown-icon {
-  position: absolute;
-  top: -14px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 20px;
-}
-
-.podium-name {
-  font-size: 19px;
-  font-weight: 800;
   color: #ffffff;
-  max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+}
+.stage-timer-circle.urgent {
+  border-color: #ef4444;
+  color: #f87171;
+  animation: pulse-border 1s infinite;
+}
+.timer-sec {
+  font-size: 38px;
+  font-weight: 900;
+  line-height: 1;
+}
+.stage-timer-circle small {
+  font-size: 14px;
+  opacity: 0.7;
 }
 
-.podium-score {
+.asym-question-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(12px);
+  border-radius: 24px;
+  padding: 32px 36px;
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+}
+.asym-question-text {
+  margin: 0;
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1.45;
+  color: #f8fafc;
+}
+
+.asym-options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.asym-opt-box {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 22px 24px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.16);
+}
+.asym-opt-box.correct {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.25);
+}
+.asym-opt-box.wrong {
+  border-color: #ef4444;
+  opacity: 0.6;
+}
+.asym-opt-box.elim {
+  opacity: 0.3;
+  text-decoration: line-through;
+}
+.opt-fill-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(16, 185, 129, 0.3);
+  z-index: 1;
+  transition: width 0.3s ease;
+}
+.opt-key-circle {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #10b981;
+  display: grid;
+  place-items: center;
   font-size: 28px;
   font-weight: 900;
   color: #ffffff;
-  line-height: 1;
-}
-
-.podium-card.gold .podium-score {
-  color: #fef08a;
-  font-size: 31px;
-}
-
-.podium-score small {
-  font-size: 15px;
-  margin-left: 2px;
-}
-
-/* 5×6 紧凑森林天梯矩阵 (30格满铺，格内紧凑无留白) */
-.forest-matrix-grid {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(6, 1fr);
-  gap: 8px;
-}
-
-.matrix-cell {
-  background: rgba(34, 72, 60, 0.78);
-  border: 1.5px solid rgba(167, 243, 208, 0.24);
-  border-radius: 12px;
-  padding: 6px 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-}
-
-.cell-head {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  font-size: 14px;
-  font-weight: 800;
-  color: #cbd5e1;
-  line-height: 1;
-}
-
-.cell-streak {
-  color: #fde68a;
-}
-
-.cell-avatar {
-  width: 58px;
-  height: 58px;
-  border-radius: 12px;
-  object-fit: cover;
-}
-
-.cell-name {
-  font-size: 17px;
-  font-weight: 700;
-  color: #f1f5f9;
-  max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.15;
-}
-
-.cell-score {
-  font-size: 22px;
-  font-weight: 900;
-  color: #fef08a;
-  line-height: 1.1;
-}
-
-.cell-score small {
-  font-size: 13px;
-}
-
-/* ============================================================================
-   THEME 2: 手账方格闪词 (layout-notebook)
-   ============================================================================ */
-.layout-notebook {
-  width: 100%;
-  height: 100%;
-  box-sizing: border-box;
-  padding: 16px 22px 10px;
-  background-color: #f4f5ef;
-  background-image:
-    linear-gradient(to right, rgba(148, 163, 184, 0.16) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(148, 163, 184, 0.16) 1px, transparent 1px);
-  background-size: 32px 32px;
-  color: #1e293b;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.nb-topbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.nb-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.nb-live-badge {
-  padding: 4px 12px;
-  border-radius: 8px;
-  background: #dc2626;
-  color: #ffffff;
-  font-size: 17px;
-  font-weight: 900;
-}
-
-.nb-game-name {
-  font-size: 24px;
-  font-weight: 900;
-  color: #0f172a;
-}
-
-.nb-gift-ticker {
-  padding: 5px 14px;
-  border-radius: 999px;
-  background: #fef3c7;
-  border: 1.5px solid #f59e0b;
-  color: #92400e;
-  font-size: 16px;
-  font-weight: 800;
-}
-
-.nb-question-card {
-  background: rgba(255, 255, 255, 0.94);
-  border: 2px solid #cbd5e1;
-  border-radius: 20px;
-  padding: 16px 22px;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.nb-card-meta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.nb-level-badge {
-  padding: 4px 12px;
-  border-radius: 6px;
-  background: #d9f99d;
-  border: 1.5px solid #84cc16;
-  color: #365314;
-  font-size: 17px;
-  font-weight: 900;
-}
-
-.nb-progress-text {
-  font-size: 19px;
-  font-weight: 800;
-  color: #b91c1c;
-}
-
-.nb-timer-circle {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  border: 3.5px solid #1e293b;
-  display: grid;
-  place-items: center;
-  font-size: 20px;
-  font-weight: 900;
-  color: #0f172a;
-}
-
-.nb-timer-circle.urgent {
-  border-color: #dc2626;
-  color: #dc2626;
-}
-
-.nb-rule-hint {
-  margin-left: auto;
-  font-size: 17px;
-  color: #64748b;
-  font-weight: 700;
-}
-
-.nb-question-title {
-  margin: 0;
-  font-size: 42px;
-  font-weight: 900;
-  color: #0f172a;
-  line-height: 1.22;
-}
-
-.nb-highlighter {
-  background: linear-gradient(180deg, transparent 58%, #d9f99d 58%, #bef264 94%, transparent 94%);
-  padding: 0 6px;
-}
-
-.nb-options-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-
-.nb-option-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 11px 16px;
-  border-radius: 12px;
-  background: #ffffff;
-  border: 1.5px solid #cbd5e1;
-}
-
-.nb-option-item.correct {
-  background: #ecfccb;
-  border-color: #65a30d;
-}
-
-.nb-option-item.eliminated {
-  opacity: 0.4;
-  text-decoration: line-through;
-}
-
-.nb-opt-key {
-  width: 34px;
-  height: 34px;
-  border-radius: 7px;
-  background: #1e293b;
-  color: #ffffff;
-  display: grid;
-  place-items: center;
-  font-size: 19px;
-  font-weight: 900;
-  flex-shrink: 0;
-}
-
-.nb-opt-val {
-  font-size: 22px;
-  font-weight: 800;
-  color: #1e293b;
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.nb-opt-mark {
-  font-size: 24px;
-  font-weight: 900;
-}
-
-.nb-opt-mark.right {
-  color: #16a34a;
-}
-
-.nb-opt-mark.wrong {
-  color: #dc2626;
-}
-
-.nb-opt-pct {
-  font-size: 16px;
-  font-weight: 800;
-  color: #64748b;
-  flex-shrink: 0;
-}
-
-/* 紧凑双列实时判卷流 + 悬浮首答胶囊 */
-.nb-judge-stream {
-  position: relative;
-  padding: 16px 16px 8px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.8);
-  border: 1.5px dashed #cbd5e1;
-  flex-shrink: 0;
-}
-
-.nb-floating-firstblood {
-  position: absolute;
-  top: -14px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 4px 22px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #10b981 0%, #22c55e 100%);
-  color: #ffffff;
-  font-size: 18px;
-  font-weight: 900;
-  box-shadow: 0 6px 14px rgba(16, 185, 129, 0.3);
-  white-space: nowrap;
-}
-
-.nb-judge-rows {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 6px 16px;
-}
-
-.nb-judge-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 4px 8px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-}
-
-.nb-row-user {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.nb-row-user img {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.nb-row-user strong {
-  font-size: 18px;
-  font-weight: 800;
-  color: #1e293b;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.nb-row-opt {
-  padding: 1px 8px;
-  border-radius: 4px;
-  background: #e2e8f0;
-  color: #475569;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.nb-row-mark {
-  font-size: 24px;
-  font-weight: 900;
-}
-
-.nb-row-mark.ok {
-  color: #16a34a;
-}
-
-.nb-row-mark.fail {
-  color: #ef4444;
-}
-
-/* TOP 30 白卡方格榜 (5列×6行，满铺无底部空白) */
-.nb-leaderboard-card {
-  flex: 1;
-  min-height: 0;
-  background: rgba(255, 255, 255, 0.94);
-  border: 2px solid #cbd5e1;
-  border-radius: 20px;
-  padding: 12px 14px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.nb-board-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.nb-board-title {
-  font-size: 22px;
-  font-weight: 900;
-  color: #0f172a;
-}
-
-.nb-board-meta {
-  font-size: 17px;
-  font-weight: 700;
-  color: #475569;
-}
-
-.nb-top30-grid {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(6, 1fr);
-  gap: 8px;
-}
-
-.nb-rank-cell {
-  position: relative;
-  background: #f8fafc;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 6px 6px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-}
-
-.nb-rank-cell.podium {
-  background: #fefce8;
-  border-color: #facc15;
-}
-
-.nb-cell-rank {
-  position: absolute;
-  top: 4px;
-  right: 8px;
-  font-size: 14px;
-  font-weight: 800;
-  color: #64748b;
-}
-
-.nb-cell-rank.r-1,
-.nb-cell-rank.r-2,
-.nb-cell-rank.r-3 {
-  color: #b45309;
-  font-weight: 900;
-}
-
-.nb-cell-avatar {
-  width: 64px;
-  height: 64px;
-  border-radius: 12px;
-  object-fit: cover;
-}
-
-.nb-cell-name {
-  font-size: 17px;
-  font-weight: 800;
-  color: #334155;
-  max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.15;
-}
-
-.nb-cell-points {
-  font-size: 24px;
-  font-weight: 900;
-  color: #0f172a;
-  line-height: 1.05;
-}
-
-/* ============================================================================
-   THEME 3: 赛博电音派对 (layout-cyber)
-   ============================================================================ */
-.layout-cyber {
-  width: 100%;
-  height: 100%;
-  box-sizing: border-box;
-  padding: 16px 22px 10px;
-  background:
-    radial-gradient(circle at 20% 15%, rgba(255, 42, 133, 0.28) 0%, transparent 45%),
-    radial-gradient(circle at 80% 25%, rgba(0, 245, 212, 0.24) 0%, transparent 45%),
-    linear-gradient(180deg, #0b0418 0%, #14072b 55%, #070210 100%);
-  color: #f8fafc;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.cyber-hud-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.cyber-hud-left,
-.cyber-hud-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.cyber-live-tag {
-  padding: 4px 12px;
-  border-radius: 6px;
-  background: #ff2a85;
-  color: #ffffff;
-  font-size: 17px;
-  font-weight: 900;
-}
-
-.cyber-room-tag,
-.cyber-energy-pill,
-.cyber-players-pill {
-  padding: 4px 12px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(0, 245, 212, 0.35);
-  color: #e2e8f0;
-  font-size: 16px;
-  font-weight: 800;
-}
-
-.cyber-question-cockpit {
-  padding: 16px 22px;
-  border-radius: 20px;
-  background: rgba(19, 9, 43, 0.88);
-  border: 2px solid #00f5d4;
-  box-shadow: 0 0 24px rgba(0, 245, 212, 0.18);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.cockpit-top-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.cockpit-kicker {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.neon-chip {
-  padding: 3px 10px;
-  border-radius: 6px;
-  background: rgba(0, 245, 212, 0.2);
-  color: #00f5d4;
-  font-size: 15px;
-  font-weight: 900;
-}
-
-.neon-assist {
-  font-size: 17px;
-  font-weight: 800;
-  color: #fde047;
-}
-
-.cockpit-timer-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 14px;
-  border-radius: 999px;
-  border: 2px solid #00f5d4;
-  color: #00f5d4;
-  font-size: 18px;
-  font-weight: 900;
-}
-
-.cockpit-timer-pill.urgent {
-  border-color: #ff2a85;
-  color: #ff2a85;
-}
-
-.cockpit-title {
-  margin: 0;
-  font-size: 38px;
-  font-weight: 900;
-  line-height: 1.2;
-  color: #ffffff;
-  text-align: center;
-}
-
-.cyber-tracks-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-
-.cyber-track-row {
-  position: relative;
-  overflow: hidden;
-  border-radius: 14px;
-  background: rgba(30, 14, 62, 0.85);
-  border: 1.5px solid rgba(255, 255, 255, 0.16);
-  padding: 11px 16px;
-}
-
-.track-neon-bar {
-  position: absolute;
-  inset: 0 auto 0 0;
-  background: linear-gradient(90deg, rgba(0, 245, 212, 0.32), rgba(255, 42, 133, 0.32));
-}
-
-.cyber-track-row.correct {
-  border-color: #00f5d4;
-  box-shadow: 0 0 18px rgba(0, 245, 212, 0.4);
-}
-
-.track-inner {
-  position: relative;
   z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.track-key {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  background: #00f5d4;
-  color: #090418;
-  display: grid;
-  place-items: center;
-  font-size: 20px;
-  font-weight: 900;
   flex-shrink: 0;
 }
-
-.opt-B .track-key { background: #ff2a85; color: #ffffff; }
-.opt-C .track-key { background: #facc15; color: #090418; }
-.opt-D .track-key { background: #a855f7; color: #ffffff; }
-
-.track-text {
-  font-size: 22px;
-  font-weight: 800;
+.opt-label-text {
   flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.track-pct {
-  font-size: 19px;
-  font-weight: 900;
-  color: #00f5d4;
-}
-
-.cyber-avatars-strip {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.reactor-user-pill {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  border-radius: 12px;
-  background: rgba(25, 11, 52, 0.85);
-  border: 1px solid rgba(0, 245, 212, 0.28);
-}
-
-.reactor-user-pill.hit {
-  border-color: #00f5d4;
-}
-
-.reactor-user-pill img {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.reactor-user-meta {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.reactor-user-meta strong {
-  font-size: 15px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.reactor-user-meta small {
-  font-size: 11px;
-  color: #94a3b8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.reactor-user-pill b {
-  font-size: 17px;
-  color: #00f5d4;
-}
-
-/* 赛博三强 + 5×6 霓虹矩阵 */
-.cyber-podium-row {
-  display: grid;
-  grid-template-columns: 1fr 1.12fr 1fr;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-.cyber-podium-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-radius: 16px;
-  background: rgba(25, 12, 54, 0.9);
-  border: 2px solid rgba(0, 245, 212, 0.45);
-}
-
-.cyber-podium-card.top-1 {
-  border-color: #facc15;
-  background: linear-gradient(135deg, rgba(250, 204, 21, 0.22), rgba(255, 42, 133, 0.22));
-  box-shadow: 0 0 20px rgba(250, 204, 21, 0.25);
-}
-
-.cyber-podium-card.top-3 {
-  border-color: #ff2a85;
-}
-
-.cp-rank {
-  font-size: 20px;
-  font-weight: 900;
-  color: #facc15;
-}
-
-.cyber-podium-card img {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  border: 2px solid #00f5d4;
-  flex-shrink: 0;
-}
-
-.cp-info {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.cp-info strong {
-  font-size: 19px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.cp-info b {
-  font-size: 25px;
-  color: #00f5d4;
-}
-
-.cp-info b small {
-  font-size: 13px;
-}
-
-.cyber-matrix-grid {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(6, 1fr);
-  gap: 8px;
-}
-
-.cyber-cell {
-  background: rgba(20, 9, 44, 0.85);
-  border: 1.5px solid rgba(168, 85, 247, 0.35);
-  border-radius: 12px;
-  padding: 6px 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-}
-
-.cyber-cell-head {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  font-size: 14px;
-  font-weight: 800;
-  color: #a855f7;
-  line-height: 1;
-}
-
-.cc-streak {
-  color: #00f5d4;
-}
-
-.cc-avatar {
-  width: 58px;
-  height: 58px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(0, 245, 212, 0.5);
-  object-fit: cover;
-}
-
-.cc-name {
-  font-size: 17px;
+  font-size: 28px;
   font-weight: 700;
   color: #f8fafc;
-  max-width: 100%;
+  z-index: 2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.15;
 }
-
-.cc-pts {
-  font-size: 22px;
-  font-weight: 900;
-  color: #00f5d4;
-  line-height: 1.1;
-}
-
-/* ============================================================================
-   THEME 4: 街机像素乱斗 (layout-arcade)
-   ============================================================================ */
-.layout-arcade {
-  width: 100%;
-  height: 100%;
-  box-sizing: border-box;
-  padding: 16px 22px 10px;
-  background: linear-gradient(180deg, #161936 0%, #0e1024 100%);
-  color: #ffffff;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.arcade-score-strip {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 18px;
-  border-radius: 14px;
-  background: #1f244d;
-  border: 3px solid #ffd60a;
-  flex-shrink: 0;
-}
-
-.arc-stat {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.arc-stat span {
-  font-size: 15px;
-  font-weight: 900;
-  color: #93c5fd;
-}
-
-.arc-stat strong {
-  font-size: 22px;
-  font-weight: 900;
-  color: #ffd60a;
-}
-
-.arc-title-badge {
+.opt-stat-pct {
   font-size: 24px;
-  font-weight: 900;
-  color: #ffffff;
+  font-weight: 800;
+  color: #34d399;
+  z-index: 2;
 }
 
-.arcade-crt-monitor {
-  background: #1d2247;
-  border: 4px solid #60a5fa;
-  border-radius: 22px;
-  padding: 16px 22px;
+/* 答题爆发弹窗流 */
+.asym-burst-wrapper {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 24px;
+  border: 2px dashed rgba(255, 255, 255, 0.15);
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  flex-shrink: 0;
+  min-height: 0;
 }
-
-.crt-top-row {
+.burst-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
-
-.crt-stage-chip {
-  padding: 4px 12px;
-  border-radius: 6px;
-  background: #ff3b30;
-  font-size: 17px;
-  font-weight: 900;
-}
-
-.crt-first-chip {
-  font-size: 17px;
+.burst-title {
+  font-size: 24px;
   font-weight: 800;
-  color: #fde047;
+  color: #10b981;
 }
-
-.crt-timer-box {
-  padding: 4px 14px;
-  border-radius: 8px;
-  background: #090b1a;
-  border: 2px solid #ffd60a;
-  font-size: 19px;
-  font-weight: 900;
-  color: #ffd60a;
+.burst-note {
+  font-size: 20px;
+  color: #94a3b8;
 }
-
-.crt-question-text {
-  margin: 0;
-  font-size: 38px;
-  font-weight: 900;
-  text-align: center;
-  line-height: 1.22;
+.asym-burst-lane {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 14px;
 }
-
-.arcade-buttons-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-
-.arcade-push-btn {
+.asym-burst-pop {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-radius: 14px;
-  background: #283061;
-  border: 3px solid #93c5fd;
+  gap: 16px;
+  padding: 12px 18px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  animation: burstUp 0.35s cubic-bezier(0.18, 1, 0.3, 1);
 }
-
-.arcade-push-btn.correct {
-  background: #14532d;
-  border-color: #4ade80;
+@keyframes burstUp {
+  0% { transform: translateY(20px) scale(0.9); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
 }
-
-.arc-btn-key {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+.asym-burst-pop.right {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+.burst-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.burst-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.burst-info strong {
+  font-size: 24px;
+  color: #ffffff;
+}
+.burst-info small {
+  font-size: 18px;
+  color: #94a3b8;
+}
+.burst-choice {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: #334155;
+  color: #ffffff;
   display: grid;
   place-items: center;
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 900;
-  color: #ffffff;
-  background: #ff3b30;
-  flex-shrink: 0;
 }
-
-.btn-B .arc-btn-key { background: #0a84ff; }
-.btn-C .arc-btn-key { background: #30d158; }
-.btn-D .arc-btn-key { background: #ff9f0a; }
-
-.arc-btn-body {
+.burst-choice.ok {
+  background: #10b981;
+}
+.asym-burst-empty {
   flex: 1;
-  min-width: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 30px;
+  color: #94a3b8;
+  font-size: 24px;
+  line-height: 1.6;
+}
+.asym-left-footer {
   display: flex;
-  flex-direction: column;
-}
-
-.arc-btn-body strong {
-  font-size: 21px;
-  font-weight: 900;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.arc-btn-body small {
-  font-size: 13px;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 10px;
+  font-size: 22px;
   color: #cbd5e1;
 }
 
-.arc-ko-stamp {
-  padding: 4px 10px;
-  border-radius: 6px;
-  background: #ffd60a;
-  color: #000000;
-  font-size: 16px;
-  font-weight: 900;
-}
-
-.arc-hit-list {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.arc-hit-chip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  border-radius: 12px;
-  background: #1f244d;
-  border: 2px solid #f59e0b;
-}
-
-.arc-hit-chip img {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  flex-shrink: 0;
-}
-
-.arc-hit-info {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.arc-hit-info strong {
-  font-size: 15px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.arc-hit-info b {
-  font-size: 14px;
-  color: #4ade80;
-}
-
-.arc-podium-trio {
-  display: grid;
-  grid-template-columns: 1fr 1.12fr 1fr;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-.arc-champ-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 16px;
-  background: #252b5c;
-  border: 3px solid #94a3b8;
-}
-
-.arc-champ-card.place-1 {
-  border-color: #ffd60a;
-  background: #3b2f13;
-}
-
-.arc-place-badge {
-  font-size: 17px;
-  font-weight: 900;
-  color: #ffd60a;
-}
-
-.arc-champ-card img {
-  width: 54px;
-  height: 54px;
-  border-radius: 10px;
-  flex-shrink: 0;
-}
-
-.arc-champ-meta {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.arc-champ-meta strong {
-  font-size: 18px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.arc-champ-meta b {
-  font-size: 24px;
-  color: #ffd60a;
-}
-
-.arc-challenger-grid {
+/* 右侧 35% 独立垂直排行榜 */
+.asym-right-sidebar {
   flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(6, 1fr);
-  gap: 8px;
-}
-
-.arc-challenger-cell {
-  background: #1a1f42;
-  border: 2px solid rgba(147, 197, 253, 0.32);
-  border-radius: 12px;
-  padding: 6px 8px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 28px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
+  min-height: 0;
+  box-sizing: border-box;
 }
-
-.arc-c-head {
-  width: 100%;
+.asym-rank-header {
   display: flex;
   justify-content: space-between;
-  font-size: 14px;
+  align-items: center;
+  padding-bottom: 16px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+}
+.sidebar-title {
+  font-size: 28px;
   font-weight: 900;
-  line-height: 1;
+  color: #f8fafc;
+}
+.sidebar-count {
+  font-size: 20px;
+  color: #10b981;
+  font-weight: 700;
+}
+.asym-rank-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 16px;
+  padding-top: 16px;
 }
 
-.arc-c-rank {
-  color: #93c5fd;
+/* 常驻固定前三名 */
+.asym-fixed-top3 {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
-
-.arc-c-streak {
-  color: #fde68a;
+.top3-fixed-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.16);
 }
-
-.arc-challenger-cell img {
-  width: 58px;
-  height: 58px;
-  border-radius: 10px;
+.top3-fixed-card.gold {
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.25), rgba(245, 158, 11, 0.05));
+  border-color: #f59e0b;
+}
+.top3-fixed-card.silver {
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.25), rgba(148, 163, 184, 0.05));
+  border-color: #cbd5e1;
+}
+.top3-fixed-card.bronze {
+  background: linear-gradient(90deg, rgba(217, 119, 6, 0.25), rgba(217, 119, 6, 0.05));
+  border-color: #b45309;
+}
+.badge-crown {
+  font-size: 22px;
+  font-weight: 900;
+}
+.top3-avatar {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
   object-fit: cover;
 }
-
-.arc-c-name {
-  font-size: 17px;
-  font-weight: 700;
-  max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.15;
-}
-
-.arc-c-score {
-  font-size: 22px;
-  font-weight: 900;
-  color: #ffd60a;
-  line-height: 1.1;
-}
-
-/* ============================================================================
-   THEME 5: 国潮金榜状元 (layout-imperial)
-   ============================================================================ */
-.layout-imperial {
-  width: 100%;
-  height: 100%;
-  box-sizing: border-box;
-  padding: 16px 22px 10px;
-  background: radial-gradient(circle at 50% 15%, #5c1116 0%, #2b0709 60%, #140304 100%);
-  color: #fef3c7;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.imp-plaque-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 20px;
-  border-radius: 14px;
-  background: linear-gradient(90deg, #3b0a0d 0%, #591116 50%, #3b0a0d 100%);
-  border: 2px solid #e5b869;
-  flex-shrink: 0;
-}
-
-.imp-cloud-tag,
-.imp-round-tag {
-  font-size: 17px;
-  font-weight: 800;
-  color: #fde68a;
-}
-
-.imp-main-plaque {
-  font-size: 24px;
-  font-weight: 900;
-  color: #fde047;
-  letter-spacing: 0.05em;
-}
-
-.imp-scroll-stage {
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-}
-
-.scroll-roller {
-  height: 10px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #78350f 0%, #f59e0b 50%, #78350f 100%);
-}
-
-.scroll-paper-body {
-  margin: 0 10px;
-  padding: 14px 20px;
-  background: linear-gradient(180deg, #fcf5e5 0%, #f3e5c8 100%);
-  border-left: 3px solid #d97706;
-  border-right: 3px solid #d97706;
-  color: #29150c;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.scroll-paper-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-
-.imp-seal-mini {
-  padding: 2px 10px;
-  border-radius: 4px;
-  background: #b91c1c;
-  color: #ffffff;
-  font-size: 16px;
-  font-weight: 900;
-}
-
-.imp-first-report {
-  font-size: 17px;
-  font-weight: 800;
-  color: #991b1b;
-}
-
-.imp-gift-mini {
-  font-size: 15px;
-  font-weight: 800;
-  color: #92400e;
-  max-width: 340px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.imp-question-title {
-  margin: 0;
-  font-size: 38px;
-  font-weight: 900;
-  text-align: center;
-  color: #1c0d06;
-  line-height: 1.22;
-}
-
-.imp-options-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-
-.imp-option-tablet {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.76);
-  border: 1.5px solid #d6b37c;
-}
-
-.imp-option-tablet.correct {
-  background: #fef08a;
-  border-color: #b91c1c;
-}
-
-.imp-seal-letter {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: #b91c1c;
-  color: #fef3c7;
-  display: grid;
-  place-items: center;
-  font-size: 19px;
-  font-weight: 900;
-  flex-shrink: 0;
-}
-
-.imp-opt-text {
+.top3-meta {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.top3-meta strong {
+  font-size: 24px;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.top3-meta .pts {
   font-size: 22px;
   font-weight: 800;
-  color: #29150c;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.imp-imperial-stamp {
-  padding: 2px 8px;
-  border: 1.5px solid #b91c1c;
-  border-radius: 4px;
-  color: #b91c1c;
-  font-size: 15px;
-  font-weight: 900;
-}
-
-.imp-opt-pct {
-  font-size: 17px;
-  font-weight: 800;
-  color: #92400e;
-}
-
-.imp-answer-scroll-row {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.imp-scholar-pill {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  border-radius: 12px;
-  background: rgba(69, 10, 10, 0.85);
-  border: 1.5px solid rgba(229, 184, 105, 0.45);
-}
-
-.imp-scholar-pill img {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.imp-scholar-meta {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.imp-scholar-meta strong {
-  font-size: 15px;
-  color: #ffffff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.imp-scholar-meta b {
-  font-size: 14px;
-  color: #fde047;
-}
-
-/* 三甲牌匾 + 5×6 进士金榜 */
-.imp-trio-plaques {
-  display: grid;
-  grid-template-columns: 1fr 1.12fr 1fr;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-.imp-trio-card {
-  border-radius: 16px;
-  padding: 10px 14px;
-  background: linear-gradient(180deg, #4c0d12 0%, #2a0609 100%);
-  border: 2px solid #d97706;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.imp-trio-card.first {
-  background: linear-gradient(180deg, #7c1d1d 0%, #450a0a 100%);
-  border-color: #fde047;
-  box-shadow: 0 6px 20px rgba(250, 204, 21, 0.22);
-}
-
-.imp-trio-title {
-  padding: 3px 10px;
-  border-radius: 8px;
-  background: rgba(253, 224, 71, 0.18);
-  color: #fde047;
-  font-size: 16px;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.imp-trio-card img {
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  border: 2px solid #fde047;
-  flex-shrink: 0;
-}
-
-.imp-trio-info {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.imp-trio-info strong {
-  font-size: 18px;
-  color: #ffffff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.imp-trio-info b {
-  font-size: 24px;
-  color: #fde047;
-}
-
-.imp-jinshi-grid {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(6, 1fr);
-  gap: 8px;
-}
-
-.imp-jinshi-cell {
-  background: rgba(60, 10, 14, 0.82);
-  border: 1.5px solid rgba(229, 184, 105, 0.38);
-  border-radius: 12px;
-  padding: 6px 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-}
-
-.jinshi-cell-head {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  font-size: 14px;
-  font-weight: 900;
-  line-height: 1;
-}
-
-.jinshi-rank {
   color: #fbbf24;
 }
 
-.jinshi-streak {
-  color: #fde68a;
+/* 第4名起平滑滚动区域 */
+.asym-scroll-section {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  border-top: 1px dashed rgba(255, 255, 255, 0.12);
+  padding-top: 10px;
 }
-
-.imp-jinshi-cell img {
-  width: 58px;
-  height: 58px;
+.scroll-ticker-track {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.scroll-ticker-track.animate {
+  animation: tickerScroll 24s linear infinite;
+}
+@keyframes tickerScroll {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+.asym-ticker-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.ticker-rank {
+  font-size: 20px;
+  font-weight: 800;
+  color: #94a3b8;
+  width: 32px;
+}
+.ticker-avatar {
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
-  border: 1.5px solid #e5b869;
   object-fit: cover;
 }
-
-.jinshi-name {
-  font-size: 17px;
-  font-weight: 700;
-  color: #ffffff;
-  max-width: 100%;
+.ticker-name {
+  flex: 1;
+  font-size: 20px;
+  color: #e2e8f0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.15;
+}
+.ticker-pts {
+  font-size: 20px;
+  color: #10b981;
+  font-weight: 800;
 }
 
-.jinshi-pts {
-  font-size: 22px;
-  font-weight: 900;
-  color: #fde047;
-  line-height: 1.1;
-}
-
-.jinshi-pts small {
-  font-size: 13px;
-}
-
-/* 零虚拟数据：无人作答与无人上榜时的真实空状态提示样式 */
-.canvas-empty-answer-strip {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 26px 36px;
-  border-radius: 22px;
-  background: rgba(15, 23, 42, 0.48);
-  border: 2px dashed rgba(255, 255, 255, 0.22);
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.canvas-empty-answer-strip.light {
-  background: rgba(255, 255, 255, 0.72);
-  border-color: rgba(15, 23, 42, 0.18);
-  color: #475569;
-}
-
-.canvas-empty-leaderboard {
+.asym-rank-empty {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  gap: 22px;
-  padding: 60px 48px;
-  border-radius: 28px;
-  background: rgba(15, 23, 42, 0.45);
-  border: 2px dashed rgba(255, 255, 255, 0.2);
+  padding: 40px 20px;
+  color: #94a3b8;
+}
+.empty-icon-trophy {
+  font-size: 72px;
+  margin-bottom: 16px;
+}
+.asym-rank-empty strong {
+  font-size: 32px;
   color: #f8fafc;
+  margin-bottom: 12px;
+}
+.asym-rank-empty p {
+  font-size: 22px;
+  line-height: 1.5;
+  margin: 0;
 }
 
-.canvas-empty-leaderboard.light {
-  background: rgba(248, 250, 252, 0.9);
-  border-color: rgba(15, 23, 42, 0.15);
-  color: #1e293b;
+/* ============================================================================
+   THEME 2: 三段式手账闪词流 (layout-notebook-tier)
+   大题卡 + 判卷气泡瀑布 + 底部横向滑动画廊榜
+   ============================================================================ */
+.layout-notebook-tier {
+  width: 1080px;
+  height: 1920px;
+  background: #f8fafc;
+  color: #0f172a;
+  display: flex;
+  flex-direction: column;
+  padding: 0 0 24px;
 }
 
-.empty-board-badge {
-  padding: 12px 32px;
+/* 上段 42% 大题卡 */
+.nb-tier-top-card {
+  margin: 20px 32px 0;
+  background: #ffffff;
+  border: 3px solid #e2e8f0;
+  border-radius: 32px;
+  padding: 36px 40px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.06);
+}
+.nb-paper-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.nb-tag-round {
+  font-size: 24px;
+  font-weight: 800;
+  color: #0284c7;
+  background: #e0f2fe;
+  padding: 6px 18px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
+}
+.nb-time-clock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f1f5f9;
+  padding: 8px 20px;
+  border-radius: 999px;
   font-size: 28px;
+  font-weight: 900;
+  color: #0f172a;
+}
+.nb-time-clock.urgent {
+  background: #fee2e2;
+  color: #ef4444;
+}
+.nb-card-title {
+  margin: 0 0 32px;
+  font-size: 46px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+.nb-mark-pen {
+  background: linear-gradient(180deg, transparent 65%, #fef08a 65%);
+}
+.nb-choices-2x2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.nb-choice-cell {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 24px;
+  border: 2px solid #e2e8f0;
+  border-radius: 20px;
+  background: #f8fafc;
+}
+.nb-choice-cell.ok {
+  border-color: #10b981;
+  background: #ecfdf5;
+}
+.nb-choice-cell.err {
+  border-color: #ef4444;
+  background: #fef2f2;
+}
+.nb-choice-letter {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #0284c7;
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+.nb-choice-label {
+  flex: 1;
+  font-size: 26px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nb-choice-mark {
+  font-size: 22px;
   font-weight: 800;
 }
-
-.canvas-empty-leaderboard.light .empty-board-badge {
-  background: #e2e8f0;
-  color: #334155;
+.nb-choice-mark.green { color: #10b981; }
+.nb-choice-mark.red { color: #ef4444; }
+.nb-choice-pct {
+  font-size: 22px;
+  font-weight: 800;
+  color: #64748b;
 }
 
-.canvas-empty-leaderboard strong {
-  font-size: 46px;
+/* 中段 24% 判卷气泡瀑布 */
+.nb-tier-mid-waterfall {
+  margin: 20px 32px 0;
+  background: #f1f5f9;
+  border: 2px dashed #cbd5e1;
+  border-radius: 28px;
+  padding: 20px 28px;
+  display: flex;
+  flex-direction: column;
+  min-height: 230px;
+}
+.waterfall-title-strip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.wf-badge {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0284c7;
+}
+.wf-lead {
+  font-size: 20px;
+  color: #64748b;
+}
+.waterfall-bubble-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.wf-stamp-bubble {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+.wf-stamp-bubble.pass {
+  border-color: #a7f3d0;
+  background: #f0fdf4;
+}
+.wf-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.wf-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.wf-info strong {
+  font-size: 22px;
+  color: #0f172a;
+}
+.wf-info small {
+  font-size: 16px;
+  color: #64748b;
+}
+.wf-result-stamp {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.wf-choice-pill {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0284c7;
+}
+.wf-mark {
+  font-size: 20px;
+  font-weight: 900;
+}
+.wf-stamp-bubble.pass .wf-mark { color: #10b981; }
+.waterfall-empty-box {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  color: #64748b;
+  font-size: 24px;
+}
+
+/* 底段 34% 横向滑动画廊榜 */
+.nb-tier-bottom-gallery {
+  flex: 1;
+  margin: 20px 32px 0;
+  background: #ffffff;
+  border: 3px solid #e2e8f0;
+  border-radius: 32px;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.gallery-title-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.gallery-title span {
+  font-size: 26px;
+  font-weight: 900;
+  color: #0f172a;
+}
+.gallery-title small {
+  margin-left: 10px;
+  font-size: 18px;
+  color: #94a3b8;
+}
+.gallery-counter {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0284c7;
+}
+.gallery-cards-track {
+  flex: 1;
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+}
+.gallery-polaroid-card {
+  flex: 0 0 170px;
+  background: #f8fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.04);
+}
+.gallery-polaroid-card.champion {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+.polaroid-photo {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.polaroid-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.polaroid-rank-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 900;
+  padding: 2px 8px;
+  border-radius: 8px;
+}
+.gallery-polaroid-card.champion .polaroid-rank-badge {
+  background: #f59e0b;
+}
+.polaroid-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.polaroid-name {
+  font-size: 22px;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+.polaroid-score {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0284c7;
+}
+.gallery-empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #64748b;
+}
+.empty-polaroid-icon {
+  font-size: 64px;
+  margin-bottom: 12px;
+}
+.gallery-empty-state strong {
+  font-size: 30px;
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+.gallery-empty-state p {
+  font-size: 22px;
+  margin: 0;
+  max-width: 600px;
+}
+
+/* ============================================================================
+   THEME 3: 赛博中心辐射流 (layout-radial-cyber)
+   中央全息能量环 + 四向辐射选项槽 + 底部扇形仪表战力台
+   ============================================================================ */
+.layout-radial-cyber {
+  width: 1080px;
+  height: 1920px;
+  background: #020617;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+}
+.cyber-radial-cockpit {
+  flex: 0 0 1140px;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 32px;
+  box-sizing: border-box;
+}
+.cockpit-hud-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 22px;
+  font-weight: 800;
+  color: #38bdf8;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(56, 189, 248, 0.2);
+}
+.hud-likes-chip {
+  color: #ec4899;
+}
+.radial-stage-container {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 中央能量核心 */
+.radial-center-core {
+  position: relative;
+  z-index: 10;
+  width: 520px;
+  height: 520px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #0f172a 40%, #030712 100%);
+  border: 4px solid #06b6d4;
+  box-shadow: 0 0 60px rgba(6, 182, 212, 0.35);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  text-align: center;
+  box-sizing: border-box;
+}
+.core-countdown-ring {
+  position: absolute;
+  top: 20px;
+  width: 100px;
+  height: 100px;
+}
+.ring-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 8;
+}
+.ring-pulse {
+  fill: none;
+  stroke: #06b6d4;
+  stroke-width: 8;
+  stroke-dasharray: 440;
+  stroke-dashoffset: 80;
+}
+.core-time-number {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.core-time-number strong {
+  font-size: 34px;
+  font-weight: 900;
+  color: #38bdf8;
+}
+.core-time-number small {
+  font-size: 12px;
+  color: #94a3b8;
+}
+.core-question-display {
+  margin-top: 60px;
+}
+.core-q-title {
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1.4;
+  color: #f8fafc;
+  margin: 0;
+}
+
+/* 四角环抱按键 */
+.radial-wings-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 20px;
+  pointer-events: none;
+}
+.radial-wing-channel {
+  pointer-events: auto;
+  position: relative;
+  overflow: hidden;
+  border: 2px solid rgba(56, 189, 248, 0.25);
+  border-radius: 28px;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(8px);
+  padding: 24px;
+  display: flex;
+  align-items: flex-end;
+}
+.radial-wing-channel.correct {
+  border-color: #10b981;
+  box-shadow: 0 0 30px rgba(16, 185, 129, 0.4);
+}
+.radial-wing-channel.wrong {
+  border-color: #ef4444;
+}
+.wing-fill-plasma {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(0deg, rgba(6, 182, 212, 0.4), transparent);
+  z-index: 1;
+  transition: height 0.3s ease;
+}
+.wing-content {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.wing-letter {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: #06b6d4;
+  color: #020617;
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  font-weight: 900;
+}
+.wing-text {
+  flex: 1;
+  margin: 0 16px;
+  font-size: 26px;
+  font-weight: 700;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wing-stat {
+  font-size: 24px;
+  color: #38bdf8;
+}
+
+/* 粒子脉冲流 */
+.cyber-pulse-stream {
+  margin-top: 16px;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+}
+.pulse-capsules-row {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  width: 100%;
+}
+.pulse-user-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  white-space: nowrap;
+}
+.pill-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+.pill-name {
+  font-size: 20px;
+  font-weight: 700;
+}
+.pill-ch {
+  font-size: 18px;
+  color: #38bdf8;
+}
+.pill-hit {
+  font-size: 18px;
+  color: #10b981;
+}
+.pulse-empty-bar {
+  width: 100%;
+  text-align: center;
+  color: #64748b;
+  font-size: 22px;
+}
+
+/* 下半部 40% 扇形全息仪表战力台 */
+.cyber-fan-dashboard {
+  flex: 1;
+  background: radial-gradient(ellipse at bottom, #0e1e38 0%, #020617 80%);
+  border-top: 3px solid #06b6d4;
+  padding: 24px 32px 32px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+.fan-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.fan-title {
+  font-size: 28px;
+  font-weight: 900;
+  color: #38bdf8;
+}
+.fan-tip {
+  font-size: 20px;
+  color: #94a3b8;
+}
+.fan-podium-stage {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.fan-pillars-layout {
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  gap: 10px;
+}
+.fan-pillar-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+.pillar-avatar-holo {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.pillar-avatar-holo img {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: 2px solid #06b6d4;
+  box-shadow: 0 0 16px rgba(6, 182, 212, 0.6);
+}
+.holo-crown {
+  font-size: 18px;
+  color: #f59e0b;
+  font-weight: 900;
+}
+.holo-num {
+  font-size: 16px;
+  color: #38bdf8;
+}
+.pillar-beam-bar {
+  width: 32px;
+  border-radius: 8px 8px 0 0;
+  background: linear-gradient(180deg, #38bdf8, #0369a1);
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
+}
+.pillar-name {
+  font-size: 18px;
+  color: #cbd5e1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80px;
+  margin-top: 8px;
+}
+.pillar-pts {
+  font-size: 20px;
+  font-weight: 800;
+  color: #38bdf8;
+}
+.fan-empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #64748b;
+}
+.fan-radar-icon {
+  font-size: 64px;
+  margin-bottom: 12px;
+}
+.fan-empty-state strong {
+  font-size: 32px;
+  color: #38bdf8;
+  margin-bottom: 8px;
+}
+.fan-empty-state p {
+  font-size: 22px;
+  margin: 0;
+}
+
+/* ============================================================================
+   THEME 4: 街机四色名人堂流 (layout-arcade-hall)
+   顶部通关积分条 + 4色3D立体大按键 + 像素高分名人堂
+   ============================================================================ */
+.layout-arcade-hall {
+  width: 1080px;
+  height: 1920px;
+  background: #18181b;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 顶段 18% 街机通关积分条 */
+.arcade-stage-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 36px;
+  background: #27272a;
+  border-bottom: 3px solid #3f3f46;
+}
+.arcade-stage-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.arcade-coin-tag {
+  background: #fbbf24;
+  color: #000;
+  font-size: 22px;
+  font-weight: 900;
+  padding: 6px 18px;
+  border-radius: 999px;
+}
+.arcade-bank-tag {
+  font-size: 24px;
+  font-weight: 800;
+  color: #e4e4e7;
+}
+.arcade-timer-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #09090b;
+  border: 2px solid #52525b;
+  padding: 6px 18px;
+  border-radius: 12px;
+}
+.arcade-timer-badge span {
+  font-size: 16px;
+  color: #a1a1aa;
+}
+.arcade-timer-badge strong {
+  font-size: 32px;
+  font-weight: 900;
+  color: #22c55e;
+}
+.arcade-timer-badge.urgent strong {
+  color: #ef4444;
+}
+
+/* 中段 45% CRT 街机按键 */
+.arcade-crt-console {
+  flex: 0 0 760px;
+  margin: 20px 32px 0;
+  background: #09090b;
+  border: 4px solid #3f3f46;
+  border-radius: 28px;
+  padding: 28px 36px;
+  display: flex;
+  flex-direction: column;
+}
+.crt-question-heading {
+  margin: 0 0 28px;
+  font-size: 40px;
+  font-weight: 900;
+  line-height: 1.4;
+  color: #f8fafc;
+}
+.crt-buttons-4col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.arcade-3d-btn {
+  border-radius: 20px;
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.btn-top-cap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 24px;
+  border-radius: 18px;
+}
+.btn-color-A .btn-top-cap { background: #e11d48; color: #ffffff; }
+.btn-color-B .btn-top-cap { background: #0284c7; color: #ffffff; }
+.btn-color-C .btn-top-cap { background: #16a34a; color: #ffffff; }
+.btn-color-D .btn-top-cap { background: #d97706; color: #ffffff; }
+.btn-key {
+  font-size: 32px;
+  font-weight: 900;
+}
+.btn-text {
+  flex: 1;
+  margin: 0 16px;
+  font-size: 26px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.btn-stat {
+  font-size: 22px;
   font-weight: 900;
 }
 
-.canvas-empty-leaderboard p {
-  margin: 0;
-  max-width: 760px;
+/* 暴击伤害弹窗流 */
+.crt-hit-combo-bar {
+  margin-top: 24px;
+  min-height: 70px;
+  display: flex;
+  align-items: center;
+}
+.hit-chips-list {
+  display: flex;
+  gap: 14px;
+  width: 100%;
+}
+.hit-chip-pop {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: #27272a;
+  border: 1px solid #52525b;
+}
+.hit-chip-pop.critical {
+  border-color: #fbbf24;
+  background: #3f3f46;
+}
+.hit-av {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+.hit-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.hit-info strong {
+  font-size: 20px;
+}
+.hit-info small {
+  font-size: 14px;
+  color: #94a3b8;
+}
+.hit-damage {
+  font-size: 20px;
+  font-weight: 900;
+  color: #fbbf24;
+}
+.hit-empty-text {
+  width: 100%;
+  text-align: center;
+  color: #71717a;
+  font-size: 22px;
+}
+
+/* 底段 37% 街机名人堂 */
+.arcade-hall-fame-bottom {
+  flex: 1;
+  margin: 20px 32px 28px;
+  background: #27272a;
+  border: 3px solid #3f3f46;
+  border-radius: 28px;
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.hall-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #3f3f46;
+}
+.hall-title {
+  font-size: 26px;
+  font-weight: 900;
+  color: #fbbf24;
+}
+.hall-meta {
+  font-size: 20px;
+  color: #a1a1aa;
+}
+.hall-players-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  padding-top: 18px;
+  overflow-y: auto;
+}
+.hall-cell {
+  background: #18181b;
+  border: 2px solid #3f3f46;
+  border-radius: 16px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.hall-cell.top1 {
+  border-color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+}
+.hall-cell.top3 {
+  border-color: #e4e4e7;
+}
+.hall-cell-head {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  font-size: 16px;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+.hall-rank { color: #fbbf24; }
+.hall-streak { color: #f43f5e; }
+.hall-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  margin-bottom: 8px;
+}
+.hall-name {
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+.hall-pts {
+  font-size: 20px;
+  font-weight: 900;
+  color: #22c55e;
+}
+.hall-empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #71717a;
+}
+.hall-empty-icon {
+  font-size: 64px;
+  margin-bottom: 12px;
+}
+.hall-empty-state strong {
   font-size: 28px;
-  line-height: 1.6;
-  opacity: 0.8;
+  color: #fbbf24;
+  margin-bottom: 8px;
+}
+.hall-empty-state p {
+  font-size: 20px;
+  margin: 0;
+}
+
+/* ============================================================================
+   THEME 5: 全屏沉浸大舞台 + 底部悬浮抽屉金榜 (layout-immersive-scroll)
+   75%超大题卡舞台 + 弹幕穿梭 + 底部折叠抽屉
+   ============================================================================ */
+.layout-immersive-scroll {
+  width: 1080px;
+  height: 1920px;
+  background: radial-gradient(circle at 50% 30%, #3e1b10 0%, #1e0904 80%);
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* 75% 沉浸全屏题卡大舞台 */
+.imperial-hero-scroll {
+  flex: 1;
+  padding: 32px 48px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+.imperial-plaque-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+}
+.plaque-tag {
+  font-size: 28px;
+  font-weight: 900;
+  color: #fde047;
+}
+.plaque-timer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(254, 224, 71, 0.15);
+  border: 2px solid #b45309;
+  padding: 8px 24px;
+  border-radius: 999px;
+  font-size: 24px;
+}
+.plaque-timer strong {
+  font-size: 36px;
+  font-weight: 900;
+  color: #fde047;
+}
+.plaque-timer.urgent strong {
+  color: #ef4444;
+}
+
+/* 圣旨大卷轴 */
+.scroll-canvas-body {
+  position: relative;
+  background: #fbf5e8;
+  border: 6px solid #854d0e;
+  border-radius: 36px;
+  padding: 48px 56px;
+  color: #451a03;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  margin-bottom: 36px;
+  min-height: 280px;
+  display: flex;
+  align-items: center;
+}
+.scroll-seal-mark {
+  position: absolute;
+  top: 24px;
+  right: 28px;
+  font-size: 24px;
+  color: #dc2626;
+  border: 3px solid #dc2626;
+  padding: 4px 12px;
+  border-radius: 8px;
+  transform: rotate(-10deg);
+  font-weight: 900;
+}
+.scroll-hero-title {
+  margin: 0;
+  font-size: 52px;
+  font-weight: 900;
+  line-height: 1.4;
+}
+
+/* 四柱印章大按键 */
+.scroll-tablets-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.imperial-tablet-btn {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 26px 32px;
+  border-radius: 24px;
+  background: rgba(254, 243, 199, 0.12);
+  border: 3px solid #b45309;
+}
+.imperial-tablet-btn.ok {
+  border-color: #22c55e;
+  background: rgba(34, 197, 94, 0.25);
+}
+.tablet-seal {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: #b45309;
+  color: #fef08a;
+  display: grid;
+  place-items: center;
+  font-size: 32px;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+.tablet-text {
+  flex: 1;
+  font-size: 32px;
+  font-weight: 800;
+  color: #fef08a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tablet-state {
+  font-size: 26px;
+  font-weight: 900;
+  color: #fde047;
+}
+
+/* 弹幕飞掠气泡 */
+.scroll-danmaku-stream {
+  margin-top: 36px;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+}
+.danmaku-fly-lane {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+}
+.danmaku-scholar-tag {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: rgba(254, 224, 71, 0.2);
+  border: 1px solid #ca8a04;
+  white-space: nowrap;
+}
+.danmaku-scholar-tag.pass {
+  background: rgba(34, 197, 94, 0.25);
+  border-color: #22c55e;
+}
+.danmaku-scholar-tag img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+.danmaku-scholar-tag span {
+  font-size: 22px;
+  font-weight: 700;
+}
+.danmaku-scholar-tag b {
+  font-size: 20px;
+  color: #fde047;
+}
+.danmaku-scholar-tag small {
+  font-size: 18px;
+  color: #22c55e;
+}
+.danmaku-empty-hint {
+  width: 100%;
+  text-align: center;
+  color: #ca8a04;
+  font-size: 24px;
+}
+
+/* 底部悬浮抽屉式折叠金榜 */
+.imperial-bottom-drawer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: #2b110a;
+  border-top: 4px solid #b45309;
+  border-radius: 36px 36px 0 0;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.7);
+  transition: transform 0.35s cubic-bezier(0.18, 1, 0.3, 1);
+  transform: translateY(calc(100% - 90px));
+}
+.imperial-bottom-drawer.expanded {
+  transform: translateY(0);
+}
+.drawer-trigger-bar {
+  height: 90px;
+  padding: 0 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+.drawer-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.drawer-badge {
+  font-size: 26px;
+  font-weight: 900;
+  color: #fde047;
+}
+.drawer-summary {
+  font-size: 22px;
+  color: #cbd5e1;
+}
+.drawer-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 22px;
+  font-weight: 800;
+  color: #fde047;
+}
+.drawer-content-body {
+  height: 600px;
+  padding: 24px 40px 40px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+.drawer-trio-plaques {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.drawer-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(254, 224, 71, 0.1);
+  border: 2px solid #b45309;
+}
+.drawer-card.first {
+  background: rgba(254, 224, 71, 0.25);
+  border-color: #fde047;
+}
+.drawer-card span {
+  font-size: 20px;
+  font-weight: 900;
+  color: #fde047;
+  margin-bottom: 8px;
+}
+.drawer-card img {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  margin-bottom: 8px;
+}
+.drawer-card strong {
+  font-size: 22px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+.drawer-card b {
+  font-size: 20px;
+  color: #fde047;
+}
+.drawer-jinshi-scroll {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.drawer-jinshi-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+}
+.j-rank {
+  font-size: 18px;
+  color: #ca8a04;
+  font-weight: 800;
+}
+.drawer-jinshi-row img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+.j-name {
+  flex: 1;
+  font-size: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.j-pts {
+  font-size: 20px;
+  color: #fde047;
+}
+.drawer-empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #ca8a04;
+}
+.drawer-empty-state strong {
+  font-size: 32px;
+  color: #fde047;
+  margin-bottom: 8px;
+}
+.drawer-empty-state p {
+  font-size: 22px;
+  margin: 0;
 }
 </style>

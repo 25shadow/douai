@@ -9,9 +9,16 @@ import {
   startQuiz,
   stopQuiz
 } from './quiz/quizStore';
+import {
+  handleVersusMessages,
+  startVersus,
+  stopVersus,
+  versusState
+} from './versus/versusStore';
 import QuizBroadcastCanvas from '@/views/QuizBroadcastCanvas.vue';
+import VersusBroadcastCanvas from '@/views/VersusBroadcastCanvas.vue';
 
-export type GameModuleId = 'quiz';
+export type GameModuleId = 'quiz' | 'versus';
 
 export interface GameModuleDefinition {
   id: GameModuleId;
@@ -55,7 +62,28 @@ const quizGameModule: GameModuleDefinition = {
   }
 };
 
-export const registeredGames: GameModuleDefinition[] = [quizGameModule];
+const versusGameModule: GameModuleDefinition = {
+  id: 'versus',
+  name: '红蓝阵营对抗',
+  badge: '扣1扣2PK',
+  component: VersusBroadcastCanvas,
+  isRunning: () => versusState.running,
+  getStatusText: () => versusState.status,
+  applySavedConfig: () => {},
+  start: () => {
+    startVersus();
+  },
+  stop: () => {
+    stopVersus();
+  },
+  handleMessages: (messages: DyMessage[]) => {
+    if (versusState.running) {
+      handleVersusMessages(messages);
+    }
+  }
+};
+
+export const registeredGames: GameModuleDefinition[] = [quizGameModule, versusGameModule];
 
 export function getGameModule(id: unknown): GameModuleDefinition | undefined {
   return registeredGames.find(game => game.id === id);

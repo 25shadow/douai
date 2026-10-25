@@ -6,11 +6,11 @@ export interface QuizTheme {
   subtitle: string;
   badge: string;
   layout:
-    | 'forest-podium-matrix'
-    | 'notebook-judge-grid'
-    | 'cyber-holo-stage'
-    | 'arcade-boss-arena'
-    | 'imperial-scroll-palace';
+    | 'asymmetric-split-arena'
+    | 'triple-tier-notebook'
+    | 'radial-radar-cyber'
+    | 'arcade-classic-hall'
+    | 'immersive-drawer-scroll';
 }
 export const quizThemeStorageKey = 'douai-quiz-broadcast-theme';
 type ThemeStorage = Pick<Storage, 'getItem' | 'setItem'>;
@@ -18,38 +18,38 @@ type ThemeStorage = Pick<Storage, 'getItem' | 'setItem'>;
 export const quizThemes: QuizTheme[] = [
   {
     id: 'arena',
-    name: '森系荣耀擂台',
-    subtitle: '象牙白题卡 · 5人抢答连击 · 皇冠领奖台 · 33人同屏天梯',
-    badge: '爆款推荐',
-    layout: 'forest-podium-matrix'
+    name: '左右非对称竞技流',
+    subtitle: '左侧大题卡与瞬发喷射弹窗 · 右侧常驻前三与平滑纵向滚动榜',
+    badge: '竞技首选',
+    layout: 'asymmetric-split-arena'
   },
   {
     id: 'classroom',
-    name: '手账方格闪词',
-    subtitle: '方格手账纸 · 荧光马克笔 · 实时判卷钩叉 · TOP30紧凑白卡榜',
-    badge: '清爽高赞',
-    layout: 'notebook-judge-grid'
+    name: '三段式手账闪词流',
+    subtitle: '上方居中沉浸大题卡 · 中部判卷弹窗瀑布 · 底部横向滑动画廊卡片榜',
+    badge: '清新画廊',
+    layout: 'triple-tier-notebook'
   },
   {
     id: 'neon',
-    name: '赛博电音派对',
-    subtitle: '全息霓虹舱 · 2×2音轨能量条 · 全息三强 · 33人霓虹矩阵榜',
-    badge: '高燃酷炫',
-    layout: 'cyber-holo-stage'
+    name: '赛博中心辐射流',
+    subtitle: '中央能量环与四向辐射选项槽 · 底部扇形全息仪表战力台',
+    badge: '科幻全息',
+    layout: 'radial-radar-cyber'
   },
   {
     id: 'arcade',
-    name: '街机像素乱斗',
-    subtitle: '街机四色按键 · HIT连击条 · 三强名人堂 · 33人像素高分榜',
-    badge: '强互动感',
-    layout: 'arcade-boss-arena'
+    name: '街机四色名人堂流',
+    subtitle: '顶部通关星级 · 中央四色大按键(HIT暴击动效) · 底部像素高分名人堂',
+    badge: '复古高分',
+    layout: 'arcade-classic-hall'
   },
   {
     id: 'scroll',
-    name: '国潮金榜状元',
-    subtitle: '宣纸圣旨卷轴 · 朱砂钦定印章 · 三甲牌匾 · 33人进士金榜',
-    badge: '国风科举',
-    layout: 'imperial-scroll-palace'
+    name: '全屏沉浸抽屉流',
+    subtitle: '75%全屏大舞台圣旨题面 · 选项穿梭弹幕 · 底部悬浮折叠金榜抽屉',
+    badge: '极致沉浸',
+    layout: 'immersive-drawer-scroll'
   }
 ];
 

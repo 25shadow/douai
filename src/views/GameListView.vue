@@ -7,136 +7,214 @@
         <p>管理与运行直播间互动游戏，支持独立 9:16 竖屏渲染，OBS / 抖音伴侣窗口采集直接捕获。</p>
       </div>
 
-      <div class="game-engine-status" :class="{ running: quizState.running }">
+      <div class="game-engine-status" :class="{ running: isAnyGameRunning }">
         <span class="status-core-dot"></span>
-        <span>{{ quizState.running ? '游戏实例：正在运行中' : '游戏实例：待机中' }}</span>
+        <span>{{ isAnyGameRunning ? `正在运行：${activeGameModule?.name}` : '游戏实例：待机中' }}</span>
       </div>
     </header>
 
-    <!-- 知识问答主控大卡片 (当前实现的官方互动游戏) -->
-    <div class="game-master-card">
-      <div class="card-top-bar">
-        <div class="badge-group">
-          <span class="game-tag-active">官方互动游戏</span>
-          <span class="game-tag-tech">9:16 竖屏渲染</span>
-          <span class="game-tag-tech">弹幕驱动</span>
+    <!-- 游戏列表卡片网格 -->
+    <div class="games-cards-grid">
+      <!-- 游戏卡片 1: 知识问答 (答题竞技场) -->
+      <div class="game-master-card">
+        <div class="card-top-bar">
+          <div class="badge-group">
+            <span class="game-tag-active">官方互动游戏</span>
+            <span class="game-tag-tech">9:16 竖屏渲染</span>
+            <span class="game-tag-tech">弹幕抢答 (A/B/C/D)</span>
+          </div>
+          <div class="status-indicator-pill" :class="{ active: quizState.running }">
+            <span class="pulse-dot"></span>
+            <span>{{ quizState.running ? '运行中 (Live)' : '待机中 (Idle)' }}</span>
+          </div>
         </div>
-        <div class="status-indicator-pill" :class="{ active: quizState.running }">
-          <span class="pulse-dot"></span>
-          <span>{{ quizState.running ? '运行中 (Live)' : '待机中 (Idle)' }}</span>
+
+        <div class="game-main-content">
+          <div class="game-poster-box">
+            <span class="poster-icon">Q</span>
+            <div class="poster-overlay">
+              <strong>知识问答</strong>
+              <small>DOUAI · QUIZ</small>
+            </div>
+          </div>
+
+          <div class="game-detail-info">
+            <div class="game-title-row">
+              <h2>知识问答 (答题竞技场)</h2>
+            </div>
+            <p class="game-desc">
+              观众通过直播间弹幕发送 A、B、C、D 参与实时抢答，系统自动识别有效答案、实时累计个人积分并生成榜单。
+              支持点赞助力免除淘汰、送礼直接通关及全自动语音播报，大幅提升直播间互动率与留存时长。
+            </p>
+
+            <div class="feature-pills-row">
+              <span class="feat-pill">✨ 弹幕抢答 (A/B/C/D)</span>
+              <span class="feat-pill">⚡ 积分排行榜与淘汰机制</span>
+              <span class="feat-pill">💖 点赞助力与礼物免除</span>
+              <span class="feat-pill">🤖 AI 智能生成题库</span>
+              <span class="feat-pill">🎨 5 套专属直播主题</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 生命周期控制板 -->
+        <div class="lifecycle-control-panel">
+          <div v-if="quizState.running" class="running-status-strip">
+            <div class="running-meta">
+              <span class="round-badge">第 {{ quizProgress }} 题进行中</span>
+              <strong class="current-q">{{ quizState.question?.title || quizState.status }}</strong>
+              <span class="time-remain">倒计时：<b>{{ quizState.timeLeft }}</b> 秒</span>
+            </div>
+
+            <div class="running-actions">
+              <button 
+                v-if="quizState.phase === 'waiting'" 
+                class="ctrl-btn next-btn" 
+                type="button" 
+                @click="nextQuestion"
+              >
+                <FastForward :size="14" />
+                <span>下一题</span>
+              </button>
+
+              <button 
+                class="ctrl-btn obs-btn" 
+                type="button" 
+                title="预览直播主题效果"
+                @click="$emit('launch-obs')"
+              >
+                <Eye :size="14" />
+                <span>主题预览</span>
+              </button>
+
+              <button 
+                class="ctrl-btn stop-btn" 
+                type="button" 
+                @click="handleStopGame"
+              >
+                <Square :size="14" />
+                <span>关闭 / 结束游戏</span>
+              </button>
+            </div>
+          </div>
+
+          <div v-else class="idle-status-strip">
+            <div class="idle-text">
+              <strong>知识问答待机中</strong>
+              <small>可直接启动游戏进入开播，或进入配置修改题库、答题时长与画面主题</small>
+            </div>
+
+            <div class="idle-actions">
+              <button 
+                class="launch-action-btn" 
+                type="button" 
+                @click="handleStartGame"
+              >
+                <Play :size="15" fill="currentColor" />
+                <span>启动游戏</span>
+              </button>
+
+              <button 
+                class="config-action-btn" 
+                type="button" 
+                @click="$emit('open-quiz')"
+              >
+                <Sliders :size="15" />
+                <span>游戏配置 (题库/规则/主题)</span>
+              </button>
+
+              <button 
+                class="obs-action-btn" 
+                type="button" 
+                title="预览直播主题效果"
+                @click="$emit('launch-obs')"
+              >
+                <Eye :size="15" />
+                <span>主题预览</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="game-main-content">
-        <!-- 游戏视觉海报 -->
-        <div class="game-poster-box">
-          <span class="poster-icon">Q</span>
-          <div class="poster-overlay">
-            <strong>知识问答</strong>
-            <small>DOUAI · QUIZ</small>
+      <!-- 游戏卡片 2: 红蓝阵营对抗赛 (扣1扣2对抗) -->
+      <div class="game-master-card versus-card">
+        <div class="card-top-bar">
+          <div class="badge-group">
+            <span class="game-tag-active versus-tag">官方独立玩法</span>
+            <span class="game-tag-tech">9:16 竖屏渲染</span>
+            <span class="game-tag-tech">弹幕对决 (扣1/扣2)</span>
+          </div>
+          <div class="status-indicator-pill" :class="{ active: versusState.running }">
+            <span class="pulse-dot"></span>
+            <span>{{ versusState.running ? '对决中 (Live)' : '待机中 (Idle)' }}</span>
           </div>
         </div>
 
-        <!-- 游戏介绍与核心玩法 -->
-        <div class="game-detail-info">
-          <div class="game-title-row">
-            <h2>知识问答 (答题竞技场)</h2>
-          </div>
-          <p class="game-desc">
-            观众通过直播间弹幕发送 A、B、C、D 参与实时抢答，系统自动识别有效答案、实时累计个人积分并生成榜单。
-            支持点赞助力免除淘汰、送礼直接通关及全自动语音播报，大幅提升直播间互动率与留存时长。
-          </p>
-
-          <div class="feature-pills-row">
-            <span class="feat-pill">✨ 弹幕抢答 (A/B/C/D)</span>
-            <span class="feat-pill">⚡ 积分排行榜与淘汰机制</span>
-            <span class="feat-pill">💖 点赞助力与礼物免除</span>
-            <span class="feat-pill">🤖 AI 智能生成题库</span>
-            <span class="feat-pill">🎨 5 套专属直播主题</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 游戏生命周期控制板 (完全独立于配置保存) -->
-      <div class="lifecycle-control-panel">
-        <!-- 运行中状态条 -->
-        <div v-if="quizState.running" class="running-status-strip">
-          <div class="running-meta">
-            <span class="round-badge">第 {{ quizProgress }} 题进行中</span>
-            <strong class="current-q">{{ quizState.question?.title || quizState.status }}</strong>
-            <span class="time-remain">倒计时：<b>{{ quizState.timeLeft }}</b> 秒</span>
+        <div class="game-main-content">
+          <div class="game-poster-box versus-poster">
+            <span class="poster-icon">VS</span>
+            <div class="poster-overlay">
+              <strong>红蓝对抗</strong>
+              <small>DOUAI · BATTLE</small>
+            </div>
           </div>
 
-          <div class="running-actions">
-            <button 
-              v-if="quizState.phase === 'waiting'" 
-              class="ctrl-btn next-btn" 
-              type="button" 
-              @click="nextQuestion"
-            >
-              <FastForward :size="14" />
-              <span>下一题</span>
-            </button>
+          <div class="game-detail-info">
+            <div class="game-title-row">
+              <h2>红蓝阵营对抗 (扣1扣2大乱斗)</h2>
+            </div>
+            <p class="game-desc">
+              独立阵营对决游戏！观众在公屏发送 <b>1</b> 自动加入红队助攻，发送 <b>2</b> 加入蓝队助攻。
+              观众每次扣字都为本阵营拉扯能量拔河血条，送出礼物更可触发 5 倍暴击助威，直至率先达成 200 分赢下对决！
+            </p>
 
-            <button 
-              class="ctrl-btn obs-btn" 
-              type="button" 
-              title="预览直播主题效果"
-              @click="$emit('launch-obs')"
-            >
-              <Eye :size="14" />
-              <span>主题预览</span>
-            </button>
-
-            <button 
-              class="ctrl-btn stop-btn" 
-              type="button" 
-              @click="handleStopGame"
-            >
-              <Square :size="14" />
-              <span>关闭 / 结束游戏</span>
-            </button>
+            <div class="feature-pills-row">
+              <span class="feat-pill">🔴 发送 1 加入红队</span>
+              <span class="feat-pill">🔵 发送 2 加入蓝队</span>
+              <span class="feat-pill">⚡ 实时拔河对决血条</span>
+              <span class="feat-pill">🎁 礼物积分 5 倍暴击</span>
+              <span class="feat-pill">🏆 双阵营独立荣誉贡献榜</span>
+            </div>
           </div>
         </div>
 
-        <!-- 未运行状态栏 -->
-        <div v-else class="idle-status-strip">
-          <div class="idle-text">
-            <strong>游戏处于待机状态</strong>
-            <small>可直接启动游戏进入开播，或进入配置修改题库、答题时长与画面主题</small>
+        <div class="lifecycle-control-panel">
+          <div v-if="versusState.running" class="running-status-strip versus-running">
+            <div class="running-meta">
+              <span class="round-badge vs-badge">对抗激战中</span>
+              <strong class="current-q">🔴 红队 {{ versusState.redScore }} 分 VS 🔵 蓝队 {{ versusState.blueScore }} 分</strong>
+              <span class="time-remain">目标：<b>{{ versusState.targetScore }}</b> 分</span>
+            </div>
+
+            <div class="running-actions">
+              <button 
+                class="ctrl-btn stop-btn" 
+                type="button" 
+                @click="handleStopVersus"
+              >
+                <Square :size="14" />
+                <span>关闭 / 结束对抗</span>
+              </button>
+            </div>
           </div>
 
-          <div class="idle-actions">
-            <!-- 启动游戏 -->
-            <button 
-              class="launch-action-btn" 
-              type="button" 
-              @click="handleStartGame"
-            >
-              <Play :size="15" fill="currentColor" />
-              <span>启动游戏</span>
-            </button>
+          <div v-else class="idle-status-strip">
+            <div class="idle-text">
+              <strong>阵营对抗待机中</strong>
+              <small>点击启动游戏即可在大屏与 OBS 开启红蓝阵营对抗大拔河</small>
+            </div>
 
-            <!-- 游戏配置 -->
-            <button 
-              class="config-action-btn" 
-              type="button" 
-              @click="$emit('open-quiz')"
-            >
-              <Sliders :size="15" />
-              <span>游戏配置 (题库/规则/主题)</span>
-            </button>
-
-            <!-- 主题预览 -->
-            <button 
-              class="obs-action-btn" 
-              type="button" 
-              title="预览直播主题效果"
-              @click="$emit('launch-obs')"
-            >
-              <Eye :size="15" />
-              <span>主题预览</span>
-            </button>
+            <div class="idle-actions">
+              <button 
+                class="launch-action-btn vs-launch" 
+                type="button" 
+                @click="handleStartVersus"
+              >
+                <Play :size="15" fill="currentColor" />
+                <span>启动阵营对抗</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -145,19 +223,23 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { computed, onMounted } from 'vue';
 import { 
   Play, Square, FastForward, Sliders, Eye 
 } from '@lucide/vue';
 import { 
   quizState, quizProgress, startQuiz, stopQuiz, nextQuestion, setQuizPreviewConfig 
 } from '@/game/quiz/quizStore';
+import { versusState, startVersus, stopVersus } from '@/game/versus/versusStore';
+import { activeGameModule } from '@/game/gameRegistry';
 import { loadConfig } from '@/services/configApi';
 
 const emit = defineEmits<{
   'open-quiz': [];
   'launch-obs': [];
 }>();
+
+const isAnyGameRunning = computed(() => quizState.running || versusState.running);
 
 onMounted(async () => {
   try {
@@ -171,6 +253,7 @@ onMounted(async () => {
 });
 
 async function handleStartGame() {
+  if (versusState.running) stopVersus();
   if (!quizState.running) {
     try {
       const saved = await loadConfig();
@@ -183,6 +266,15 @@ async function handleStartGame() {
 
 function handleStopGame() {
   stopQuiz();
+}
+
+function handleStartVersus() {
+  if (quizState.running) stopQuiz();
+  startVersus();
+}
+
+function handleStopVersus() {
+  stopVersus();
 }
 </script>
 
@@ -592,6 +684,36 @@ function handleStopGame() {
 .obs-action-btn:hover {
   background: #f8fafc;
   color: #1e293b;
+}
+
+/* 红蓝对抗专属卡片样式 */
+.games-cards-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.versus-tag {
+  background: #fef2f2 !important;
+  color: #e11d48 !important;
+  border-color: #fecdd3 !important;
+}
+.versus-poster {
+  background: linear-gradient(135deg, #e11d48 0%, #0284c7 100%) !important;
+  box-shadow: 0 8px 20px rgba(225, 29, 72, 0.25) !important;
+}
+.versus-running {
+  background: #fff1f2 !important;
+  border-color: #fecdd3 !important;
+}
+.vs-badge {
+  background: #e11d48 !important;
+}
+.vs-launch {
+  background: linear-gradient(135deg, #e11d48 0%, #0284c7 100%) !important;
+  box-shadow: 0 2px 8px rgba(225, 29, 72, 0.3) !important;
+}
+.vs-launch:hover {
+  filter: brightness(1.1);
 }
 
 @media (max-width: 768px) {

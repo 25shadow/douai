@@ -345,7 +345,7 @@ export function startLiveSimulation(gameId: unknown, input: Partial<LiveSimulati
     liveState.totalUsers = Math.max(liveState.totalUsers, liveState.audience * 12 + simulationState.elapsedSeconds);
 
     if (simulationState.elapsedSeconds % config.eventIntervalSeconds === 0) {
-      const message = createSimulationMessage(simulationSequence++);
+      const message = createSimulationMessage(simulationSequence++, simulationState.gameId as any);
       if (message.method === 'WebcastLikeMessage') {
         const count = Number(message.content?.match(/\((\d+)\)/)?.[1] || 0);
         liveState.likes += count;

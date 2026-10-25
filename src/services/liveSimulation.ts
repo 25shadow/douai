@@ -6,10 +6,10 @@ export interface LiveSimulationConfig {
   eventIntervalSeconds: number;
 }
 
-export type SimulationGameId = 'quiz';
+export type SimulationGameId = 'quiz' | 'versus';
 
 export function isSupportedSimulationGame(gameId: unknown): gameId is SimulationGameId {
-  return gameId === 'quiz';
+  return gameId === 'quiz' || gameId === 'versus';
 }
 
 export interface LiveSimulationSyncPacket {
@@ -69,7 +69,7 @@ function clampInteger(value: unknown, min: number, max: number, fallback: number
   return Math.max(min, Math.min(max, Math.round(parsed)));
 }
 
-export function createSimulationMessage(index: number): DyMessage {
+export function createSimulationMessage(index: number, gameId: SimulationGameId = 'quiz'): DyMessage {
   const userIndex = Math.abs(Math.floor(index)) % demoNames.length;
   const eventIndex = Math.abs(Math.floor(index)) % 5;
   const user = { id: `demo-user-${userIndex + 1}`, name: demoNames[userIndex] };
@@ -90,10 +90,14 @@ export function createSimulationMessage(index: number): DyMessage {
     };
   }
 
+  const comment = gameId === 'versus'
+    ? (userIndex % 2 === 0 ? '1' : '2')
+    : demoComments[userIndex % demoComments.length];
+
   return {
     id,
     method: 'WebcastChatMessage' as DyMessage['method'],
     user,
-    content: demoComments[userIndex % demoComments.length]
+    content: comment
   };
 }
