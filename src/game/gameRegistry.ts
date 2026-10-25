@@ -64,8 +64,8 @@ const quizGameModule: GameModuleDefinition = {
 
 const versusGameModule: GameModuleDefinition = {
   id: 'versus',
-  name: '红蓝阵营对抗',
-  badge: '扣1扣2PK',
+  name: '阵营对抗',
+  badge: '阵营PK',
   component: VersusBroadcastCanvas,
   isRunning: () => versusState.running,
   getStatusText: () => versusState.status,

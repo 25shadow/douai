@@ -1,4 +1,5 @@
 import type { DyMessage } from '@/core/type';
+import { versusRuntimeSettings } from '@/game/versus/versusStore';
 
 export interface LiveSimulationConfig {
   durationMinutes: number;
@@ -91,7 +92,7 @@ export function createSimulationMessage(index: number, gameId: SimulationGameId 
   }
 
   const comment = gameId === 'versus'
-    ? (userIndex % 2 === 0 ? '1' : '2')
+    ? (userIndex % 2 === 0 ? (versusRuntimeSettings.redCommand || '1') : (versusRuntimeSettings.blueCommand || '2'))
     : demoComments[userIndex % demoComments.length];
 
   return {

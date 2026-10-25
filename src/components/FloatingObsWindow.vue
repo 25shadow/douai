@@ -3,18 +3,34 @@
     <div class="theme-preview-shell" role="dialog" aria-label="主题预览">
       <!-- 顶部轻量主题切换条 + 关闭按钮 -->
       <div class="preview-top-bar">
-        <div class="theme-quick-tabs">
+        <!-- 知识问答主题标签页 -->
+        <div v-if="targetGame === 'quiz'" class="theme-quick-tabs">
           <button
             v-for="t in quizThemes"
             :key="t.id"
             type="button"
             class="theme-tab-pill"
             :class="{ active: currentThemeId === t.id }"
-            @click="selectTheme(t.id)"
+            @click="selectQuizTheme(t.id)"
           >
             {{ t.name }}
           </button>
         </div>
+
+        <!-- 阵营对抗主题标签页 -->
+        <div v-else class="theme-quick-tabs">
+          <button
+            v-for="t in versusThemes"
+            :key="t.id"
+            type="button"
+            class="theme-tab-pill versus"
+            :class="{ active: currentVersusTheme === t.id }"
+            @click="selectVersusTheme(t.id)"
+          >
+            {{ t.name }}
+          </button>
+        </div>
+
         <button class="preview-close-btn" type="button" title="关闭预览" @click="$emit('close')">
           <X :size="16" />
         </button>
@@ -23,7 +39,8 @@
       <!-- 纯净无边框主题预览画布 -->
       <div class="preview-canvas-viewport" ref="viewportRef">
         <div class="preview-canvas-scaled" :style="{ transform: `scale(${scale})` }">
-          <QuizBroadcastCanvas :output-only="true" />
+          <QuizBroadcastCanvas v-if="targetGame === 'quiz'" :output-only="true" />
+          <VersusBroadcastCanvas v-else :output-only="true" />
         </div>
       </div>
     </div>
@@ -31,9 +48,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import { X } from '@lucide/vue';
 import QuizBroadcastCanvas from '@/views/QuizBroadcastCanvas.vue';
+import VersusBroadcastCanvas from '@/views/VersusBroadcastCanvas.vue';
 import {
   quizThemes,
   readQuizTheme,
@@ -42,27 +60,46 @@ import {
   subscribeQuizTheme,
   type QuizThemeId,
 } from '@/game/quiz/quizThemes';
-import { quizRuntimeSettings } from '@/game/quiz/quizStore';
+import { quizRuntimeSettings, quizState } from '@/game/quiz/quizStore';
+import {
+  versusThemes,
+  versusRuntimeSettings,
+  versusState,
+  setVersusTheme,
+  type VersusThemeId
+} from '@/game/versus/versusStore';
 
 const props = defineProps<{
   open: boolean;
+  gameId?: 'quiz' | 'versus';
 }>();
 
 defineEmits<{
   close: [];
 }>();
 
+const targetGame = computed(() => {
+  if (props.gameId) return props.gameId;
+  if (versusState.running && !quizState.running) return 'versus';
+  return 'quiz';
+});
+
 const viewportRef = ref<HTMLElement>();
 const scale = ref(0.375);
 const currentThemeId = ref<QuizThemeId>(readQuizTheme() ?? normalizeQuizTheme(quizRuntimeSettings.theme));
+const currentVersusTheme = computed(() => versusRuntimeSettings.theme || 'tug');
 
 let resizeObserver: ResizeObserver | undefined;
 let stopThemeSub: (() => void) | undefined;
 
-function selectTheme(id: QuizThemeId) {
+function selectQuizTheme(id: QuizThemeId) {
   currentThemeId.value = id;
   quizRuntimeSettings.theme = id;
   publishQuizTheme(id);
+}
+
+function selectVersusTheme(id: VersusThemeId) {
+  setVersusTheme(id);
 }
 
 function updateScale() {
@@ -118,99 +155,123 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: rgba(15, 23, 42, 0.65);
-  backdrop-filter: blur(6px);
-  display: grid;
-  place-items: center;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 16px;
+  animation: fadeIn 0.18s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .theme-preview-shell {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
+  height: 94vh;
+  aspect-ratio: 9 / 16;
   max-width: 95vw;
-  max-height: 95vh;
+  background: #000;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow:
+    0 24px 64px -12px rgba(0, 0, 0, 0.75),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 .preview-top-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: rgba(15, 23, 42, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  padding: 6px 8px;
-  border-radius: 999px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(18, 18, 22, 0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+  z-index: 10;
 }
 
 .theme-quick-tabs {
   display: flex;
   align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.theme-quick-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .theme-tab-pill {
-  padding: 5px 11px;
+  padding: 5px 12px;
   border-radius: 999px;
-  border: 0;
-  background: transparent;
-  color: #cbd5e1;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.15s;
+  white-space: nowrap;
+  transition: all 0.18s ease;
 }
 
 .theme-tab-pill:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .theme-tab-pill.active {
-  background: #10b981;
   color: #ffffff;
-  font-weight: 700;
-  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.4);
+  background: #10b981;
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.45);
+}
+
+.theme-tab-pill.versus.active {
+  background: #f43f5e;
+  box-shadow: 0 0 14px rgba(244, 63, 94, 0.45);
 }
 
 .preview-close-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 0;
-  display: grid;
-  place-items: center;
-  background: rgba(255, 255, 255, 0.1);
-  color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  color: #cbd5e1;
   cursor: pointer;
-  transition: all 0.15s;
+  flex-shrink: 0;
+  transition: all 0.18s ease;
 }
 
 .preview-close-btn:hover {
-  background: #ef4444;
-  color: #ffffff;
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
 }
 
 .preview-canvas-viewport {
+  flex: 1;
+  width: 100%;
   position: relative;
-  height: min(85vh, 780px);
-  aspect-ratio: 9 / 16;
-  width: auto;
-  border-radius: 16px;
   overflow: hidden;
-  background: #050810;
-  box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.65);
+  background: #000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
 }
 
 .preview-canvas-scaled {
-  position: absolute;
-  top: 0;
-  left: 0;
   width: 1080px;
   height: 1920px;
-  transform-origin: top left;
+  transform-origin: top center;
+  flex-shrink: 0;
 }
 </style>

@@ -184,6 +184,7 @@
     <!-- 独立 9:16 OBS 浮动画面窗口 -->
     <FloatingObsWindow 
       :open="showObsFloatingWindow" 
+      :game-id="previewGameId"
       @close="showObsFloatingWindow = false" 
     />
 
@@ -285,7 +286,12 @@ window.addEventListener('popstate', () => {
   }
 });
 
-function toggleObsWindow() {
+const previewGameId = ref<'quiz' | 'versus'>('quiz');
+
+function toggleObsWindow(gameId?: 'quiz' | 'versus') {
+  if (gameId === 'quiz' || gameId === 'versus') {
+    previewGameId.value = gameId;
+  }
   showObsFloatingWindow.value = !showObsFloatingWindow.value;
 }
 </script>

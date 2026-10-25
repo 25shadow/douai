@@ -81,7 +81,7 @@
                 class="ctrl-btn obs-btn" 
                 type="button" 
                 title="预览直播主题效果"
-                @click="$emit('launch-obs')"
+                @click="$emit('launch-obs', 'quiz')"
               >
                 <Eye :size="14" />
                 <span>主题预览</span>
@@ -127,7 +127,7 @@
                 class="obs-action-btn" 
                 type="button" 
                 title="预览直播主题效果"
-                @click="$emit('launch-obs')"
+                @click="$emit('launch-obs', 'quiz')"
               >
                 <Eye :size="15" />
                 <span>主题预览</span>
@@ -137,13 +137,13 @@
         </div>
       </div>
 
-      <!-- 游戏卡片 2: 红蓝阵营对抗赛 (扣1扣2对抗) -->
+      <!-- 游戏卡片 2: 阵营对抗 (双阵营拔河与对决) -->
       <div class="game-master-card versus-card">
         <div class="card-top-bar">
           <div class="badge-group">
             <span class="game-tag-active versus-tag">官方独立玩法</span>
             <span class="game-tag-tech">9:16 竖屏渲染</span>
-            <span class="game-tag-tech">弹幕对决 (扣1/扣2)</span>
+            <span class="game-tag-tech">双阵营对决</span>
           </div>
           <div class="status-indicator-pill" :class="{ active: versusState.running }">
             <span class="pulse-dot"></span>
@@ -155,26 +155,26 @@
           <div class="game-poster-box versus-poster">
             <span class="poster-icon">VS</span>
             <div class="poster-overlay">
-              <strong>红蓝对抗</strong>
-              <small>DOUAI · BATTLE</small>
+              <strong>阵营对抗</strong>
+              <small>DOUAI · VERSUS</small>
             </div>
           </div>
 
           <div class="game-detail-info">
             <div class="game-title-row">
-              <h2>红蓝阵营对抗 (扣1扣2大乱斗)</h2>
+              <h2>阵营对抗 (双阵营对决与拔河)</h2>
             </div>
             <p class="game-desc">
-              独立阵营对决游戏！观众在公屏发送 <b>1</b> 自动加入红队助攻，发送 <b>2</b> 加入蓝队助攻。
-              观众每次扣字都为本阵营拉扯能量拔河血条，送出礼物更可触发 5 倍暴击助威，直至率先达成 200 分赢下对决！
+              独立阵营对决游戏！观众在公屏发送 <b>{{ versusRuntimeSettings.redCommand }}</b> 自动加入 {{ versusRuntimeSettings.redTeamName }} 助攻，发送 <b>{{ versusRuntimeSettings.blueCommand }}</b> 加入 {{ versusRuntimeSettings.blueTeamName }} 助攻。
+              观众每次扣字都为本阵营拉扯能量拔河血条，送出礼物更可触发 {{ versusRuntimeSettings.giftMultiplier }} 倍暴击助威，直至率先达成 {{ versusRuntimeSettings.targetScore }} 分赢下对决！
             </p>
 
             <div class="feature-pills-row">
-              <span class="feat-pill">🔴 发送 1 加入红队</span>
-              <span class="feat-pill">🔵 发送 2 加入蓝队</span>
-              <span class="feat-pill">⚡ 实时拔河对决血条</span>
-              <span class="feat-pill">🎁 礼物积分 5 倍暴击</span>
-              <span class="feat-pill">🏆 双阵营独立荣誉贡献榜</span>
+              <span class="feat-pill">🔴 发送 {{ versusRuntimeSettings.redCommand }} 加入 {{ versusRuntimeSettings.redTeamName }}</span>
+              <span class="feat-pill">🔵 发送 {{ versusRuntimeSettings.blueCommand }} 加入 {{ versusRuntimeSettings.blueTeamName }}</span>
+              <span class="feat-pill">⚡ 实时对决血条</span>
+              <span class="feat-pill">🎁 礼物积分 {{ versusRuntimeSettings.giftMultiplier }} 倍暴击</span>
+              <span class="feat-pill">🎨 4 套专属直播主题 (拔河/机甲/街机/角斗)</span>
             </div>
           </div>
         </div>
@@ -183,11 +183,31 @@
           <div v-if="versusState.running" class="running-status-strip versus-running">
             <div class="running-meta">
               <span class="round-badge vs-badge">对抗激战中</span>
-              <strong class="current-q">🔴 红队 {{ versusState.redScore }} 分 VS 🔵 蓝队 {{ versusState.blueScore }} 分</strong>
+              <strong class="current-q">🔴 {{ versusRuntimeSettings.redTeamName }} {{ versusState.redScore }} 分 VS 🔵 {{ versusRuntimeSettings.blueTeamName }} {{ versusState.blueScore }} 分</strong>
               <span class="time-remain">目标：<b>{{ versusState.targetScore }}</b> 分</span>
             </div>
 
             <div class="running-actions">
+              <button 
+                class="ctrl-btn config-btn" 
+                type="button" 
+                title="调整游戏规则与阵营"
+                @click="isVersusConfigOpen = true"
+              >
+                <Sliders :size="14" />
+                <span>配置</span>
+              </button>
+
+              <button 
+                class="ctrl-btn obs-btn" 
+                type="button" 
+                title="预览对抗主题效果"
+                @click="$emit('launch-obs', 'versus')"
+              >
+                <Eye :size="14" />
+                <span>主题预览</span>
+              </button>
+
               <button 
                 class="ctrl-btn stop-btn" 
                 type="button" 
@@ -202,7 +222,7 @@
           <div v-else class="idle-status-strip">
             <div class="idle-text">
               <strong>阵营对抗待机中</strong>
-              <small>点击启动游戏即可在大屏与 OBS 开启红蓝阵营对抗大拔河</small>
+              <small>支持自定义红蓝阵营名称、对决目标分、礼物暴击倍数及 4 款专属视觉主题</small>
             </div>
 
             <div class="idle-actions">
@@ -214,30 +234,59 @@
                 <Play :size="15" fill="currentColor" />
                 <span>启动阵营对抗</span>
               </button>
+
+              <button 
+                class="config-action-btn" 
+                type="button" 
+                @click="isVersusConfigOpen = true"
+              >
+                <Sliders :size="15" />
+                <span>游戏配置 (规则/阵营/主题)</span>
+              </button>
+
+              <button 
+                class="obs-action-btn" 
+                type="button" 
+                title="预览对抗主题效果"
+                @click="$emit('launch-obs', 'versus')"
+              >
+                <Eye :size="15" />
+                <span>主题预览</span>
+              </button>
             </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- 阵营对抗独立配置弹窗 -->
+    <VersusConfigModal
+      v-if="isVersusConfigOpen"
+      @close="isVersusConfigOpen = false"
+      @start="handleStartVersus"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import { 
   Play, Square, FastForward, Sliders, Eye 
 } from '@lucide/vue';
 import { 
   quizState, quizProgress, startQuiz, stopQuiz, nextQuestion, setQuizPreviewConfig 
 } from '@/game/quiz/quizStore';
-import { versusState, startVersus, stopVersus } from '@/game/versus/versusStore';
+import { versusState, versusRuntimeSettings, startVersus, stopVersus } from '@/game/versus/versusStore';
 import { activeGameModule } from '@/game/gameRegistry';
 import { loadConfig } from '@/services/configApi';
+import VersusConfigModal from './VersusConfigModal.vue';
 
 const emit = defineEmits<{
   'open-quiz': [];
-  'launch-obs': [];
+  'launch-obs': [gameId?: 'quiz' | 'versus'];
 }>();
+
+const isVersusConfigOpen = ref(false);
 
 const isAnyGameRunning = computed(() => quizState.running || versusState.running);
 
