@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { liveState } from '@/stores/liveStore';
-import { quizProgress, quizRuntimeSettings, quizState } from '@/game/quiz/quizStore';
+import { quizRuntimeSettings, quizState } from '@/game/quiz/quizStore';
 import { getQuizRank, type QuizOption } from '@/game/quiz/quizRules';
 import {
   normalizeQuizTheme,
@@ -172,26 +172,49 @@ const activeGiftBanner = computed(() => {
   }
   return {
     userName: '礼物特权',
-    giftName: '小心心 / 热气球',
+    giftName: '小心心 / 棒棒糖 / 热气球',
     count: 1,
-    effectLabel: '送小心心免淘汰 · 送热气球直通榜首',
+    effectLabel: '送任意礼物直接揭晓正解答对 · 送大礼狂送积分直接通关夺魁',
     active: false
   };
 });
 
-const nextLikeThreshold = computed(
-  () =>
-    quizRuntimeSettings.likeRules
-      .filter(rule => rule.effect !== 'none' && rule.threshold > 0)
-      .sort((a, b) => a.threshold - b.threshold)[0]?.threshold || 500
-);
+const likeMilestoneInfo = computed(() => {
+  const current = quizState.likes || 0;
+  let target = 300;
+  let stageLabel = '';
 
+  if (current < 300) {
+    target = 300;
+    const remaining = 300 - current;
+    stageLabel = `还差 ${remaining} 赞 自动排除 1 个错误选项`;
+  } else if (current < 600) {
+    target = 600;
+    const remaining = 600 - current;
+    stageLabel = `已排除 1 项！还差 ${remaining} 赞 再排除 1 项`;
+  } else if (current < 1000) {
+    target = 1000;
+    const remaining = 1000 - current;
+    stageLabel = `已排除 2 项！还差 ${remaining} 赞 答题延长 15 秒`;
+  } else {
+    target = 1000;
+    stageLabel = `🎉 全员点赞已拉满！已排除 2 个错误项 + 延长 15 秒`;
+  }
+
+  const percent = Math.min(100, Math.round((current / target) * 100));
+  return {
+    current,
+    target,
+    percent,
+    stageLabel,
+    eliminatedCount: quizState.eliminatedOptions.length,
+    eliminatedOptions: quizState.eliminatedOptions
+  };
+});
+
+const nextLikeThreshold = computed(() => likeMilestoneInfo.value.target);
 const currentLikes = computed(() => quizState.likes);
-const likeProgress = computed(() =>
-  currentLikes.value > 0
-    ? Math.min(100, Math.max(5, ((currentLikes.value % nextLikeThreshold.value) / nextLikeThreshold.value) * 100))
-    : 0
-);
+const likeProgress = computed(() => likeMilestoneInfo.value.percent);
 
 const displayTime = computed(() =>
   quizState.phase === 'idle' ? quizRuntimeSettings.answerTime : quizState.timeLeft
@@ -241,22 +264,22 @@ onBeforeUnmount(() => unsubscribeTheme());
       <header class="theme-gameplay-guide">
         <div class="guide-badge">💡 玩法规则</div>
         <div class="guide-text">
-          <span>弹幕发送 <b>A / B / C / D</b> 抢答得分</span>
+          <span>公屏发送 <b>A / B / C / D</b> 免费抢答</span>
           <span class="sep">|</span>
-          <span>点赞累积满 <b>500</b> 排除错误项</span>
+          <span>点赞累积满 <b>300 / 600</b> 赞自动排除 1~2 个错误项</span>
           <span class="sep">|</span>
-          <span>送 <b>小心心</b> 触发免答特权</span>
+          <span>送 <b>小心心/礼物</b> 直接揭晓正解答对，送礼越多狂送越多积分！</span>
         </div>
       </header>
 
       <div class="asym-body">
         <!-- 左侧 65% 主答题与互动喷射舞台 -->
         <section class="asym-left-stage">
-          <!-- 题卡顶部状态 -->
+          <!-- 题卡顶部状态 (已移除题库名称和多少题) -->
           <div class="asym-stage-top">
             <div class="stage-tag-left">
               <span class="pulse-live">● LIVE</span>
-              <span class="bank-pill">{{ quizRuntimeSettings.bank }} · 第 {{ quizProgress }} 题</span>
+              <span class="bank-pill">⚡ 极速对决抢答进行中</span>
             </div>
             <div class="stage-timer-circle" :class="{ urgent: displayTime <= 5 }">
               <span class="timer-sec">{{ displayTime }}</span>
@@ -267,6 +290,24 @@ onBeforeUnmount(() => unsubscribeTheme());
           <!-- 核心大题干 -->
           <div class="asym-question-card">
             <h1 class="asym-question-text">{{ quizState.question.title }}</h1>
+          </div>
+
+          <!-- 全员点赞助力与排除进度条 (清晰明确点赞目标与排除状态) -->
+          <div class="theme-like-energy-meter arena-meter">
+            <div class="meter-head">
+              <div class="meter-title">
+                <span class="meter-heart">❤️</span>
+                <strong>全员点赞助力 {{ likeMilestoneInfo.current }} / {{ likeMilestoneInfo.target }} 赞</strong>
+              </div>
+              <span class="meter-stage-tip">{{ likeMilestoneInfo.stageLabel }}</span>
+            </div>
+            <div class="meter-bar-track">
+              <div class="meter-bar-fill" :style="{ width: `${likeMilestoneInfo.percent}%` }"></div>
+            </div>
+            <div v-if="likeMilestoneInfo.eliminatedOptions.length" class="meter-elim-tags">
+              <span>💥 错误项已排除：</span>
+              <b v-for="opt in likeMilestoneInfo.eliminatedOptions" :key="opt" class="elim-badge">【选项 {{ opt }} ✕】</b>
+            </div>
           </div>
 
           <!-- 4 个大号选项按键 (带瞬态热度) -->
@@ -283,7 +324,7 @@ onBeforeUnmount(() => unsubscribeTheme());
               <div class="opt-fill-bar" :style="{ width: `${item.percent}%` }"></div>
               <span class="opt-key-circle">{{ item.option }}</span>
               <span class="opt-label-text">{{ item.text }}</span>
-              <span class="opt-stat-pct">{{ item.isCorrect ? '✓ 正确' : item.isEliminated ? '排除' : `${item.percent}%` }}</span>
+              <span class="opt-stat-pct">{{ item.isCorrect ? '✓ 正确' : item.isEliminated ? '✕ 排除' : `${item.percent}%` }}</span>
             </div>
           </div>
 
@@ -318,7 +359,7 @@ onBeforeUnmount(() => unsubscribeTheme());
           <!-- 左侧底栏助力信息 -->
           <footer class="asym-left-footer">
             <div class="asym-gift-tip">🎁 {{ activeGiftBanner.userName }}：{{ activeGiftBanner.effectLabel }}</div>
-            <div class="asym-like-tip">❤️ {{ currentLikes }} 点赞</div>
+            <div class="asym-like-tip">❤️ {{ currentLikes }} 点赞助力</div>
           </footer>
         </section>
 
@@ -393,18 +434,18 @@ onBeforeUnmount(() => unsubscribeTheme());
       <header class="theme-gameplay-guide light-guide">
         <div class="guide-badge">📖 答题攻略</div>
         <div class="guide-text">
-          <span>直接在公屏打出 <b>A / B / C / D</b></span>
+          <span>公屏发送 <b>A / B / C / D</b> 参与速测</span>
           <span class="sep">|</span>
-          <span>系统极速识别判题</span>
+          <span>点赞累积满 <b>300 / 600</b> 赞排除 1~2 个错项</span>
           <span class="sep">|</span>
-          <span>答对进入底部<b>拍立得学员画廊</b></span>
+          <span>送 <b>小心心/礼物</b> 直接揭晓正解答对，送礼越多狂送越多积分！</span>
         </div>
       </header>
 
-      <!-- 顶段 42% 居中沉浸手账白卡 -->
+      <!-- 顶段 42% 居中沉浸手账白卡 (已移除题库名称和多少题) -->
       <section class="nb-tier-top-card">
         <div class="nb-paper-head">
-          <span class="nb-tag-round">第 {{ quizProgress }} 题 · {{ quizRuntimeSettings.bank }}</span>
+          <span class="nb-tag-round">⭐ 随堂速测 · 公屏抢答</span>
           <div class="nb-time-clock" :class="{ urgent: displayTime <= 5 }">
             <span class="clock-icon">⏳</span>
             <strong>{{ displayTime }}s</strong>
@@ -414,6 +455,24 @@ onBeforeUnmount(() => unsubscribeTheme());
         <h1 class="nb-card-title">
           <span class="nb-mark-pen">{{ quizState.question.title }}</span>
         </h1>
+
+        <!-- 全员点赞排除助力条 -->
+        <div class="theme-like-energy-meter notebook-meter">
+          <div class="meter-head">
+            <div class="meter-title">
+              <span class="meter-heart">❤️</span>
+              <strong>全员点赞助力 {{ likeMilestoneInfo.current }} / {{ likeMilestoneInfo.target }} 赞</strong>
+            </div>
+            <span class="meter-stage-tip">{{ likeMilestoneInfo.stageLabel }}</span>
+          </div>
+          <div class="meter-bar-track">
+            <div class="meter-bar-fill" :style="{ width: `${likeMilestoneInfo.percent}%` }"></div>
+          </div>
+          <div v-if="likeMilestoneInfo.eliminatedOptions.length" class="meter-elim-tags">
+            <span>💥 错误项已排除：</span>
+            <b v-for="opt in likeMilestoneInfo.eliminatedOptions" :key="opt" class="elim-badge">【选项 {{ opt }} ✕】</b>
+          </div>
+        </div>
 
         <div class="nb-choices-2x2">
           <div
@@ -505,21 +564,24 @@ onBeforeUnmount(() => unsubscribeTheme());
       <header class="theme-gameplay-guide cyber-guide">
         <div class="guide-badge">⚡ CYBER 规则</div>
         <div class="guide-text">
-          <span>终端键入 <b>A / B / C / D</b> 为能量槽注入指令</span>
+          <span>公屏发送 <b>A / B / C / D</b> 注入指令</span>
           <span class="sep">|</span>
-          <span>点赞累积光子激活排除力场</span>
+          <span>点赞累积满 <b>300 / 600</b> 赞激活等离子排除 1~2 个错项</span>
           <span class="sep">|</span>
-          <span>登顶扇形战力塔</span>
+          <span>送 <b>小心心/礼物</b> 直接载入正解答对，送礼越多狂送越多积分！</span>
         </div>
       </header>
 
-      <!-- 上半部 60% 辐射式核心控制舱 -->
+      <!-- 上半部 60% 辐射式核心控制舱 (已移除题库名称和多少题) -->
       <section class="cyber-radial-cockpit">
         <!-- 顶栏状态 -->
         <div class="cockpit-hud-bar">
-          <span class="hud-status-blink">SYS: ONLINE · R{{ quizProgress }}</span>
-          <span class="hud-center-bank">{{ quizRuntimeSettings.bank }}</span>
-          <span class="hud-likes-chip">❤️ {{ currentLikes }} PHOTONS</span>
+          <span class="hud-status-blink">⚡ RADAR: ONLINE · 极速能量战</span>
+          <div class="hud-likes-chip">
+            <span class="chip-heart">❤️</span>
+            <strong>全员点赞 {{ likeMilestoneInfo.current }}/{{ likeMilestoneInfo.target }} 赞</strong>
+            <small>({{ likeMilestoneInfo.stageLabel }})</small>
+          </div>
         </div>
 
         <!-- 辐射主舞台 (中央环形能量核心 + 选项四向环抱) -->
@@ -626,21 +688,25 @@ onBeforeUnmount(() => unsubscribeTheme());
     <div v-else-if="theme === 'arcade'" class="layout-arcade-hall">
       <!-- 统一显眼玩法指南横幅 -->
       <header class="theme-gameplay-guide arcade-guide">
-        <div class="guide-badge">🕹️ 街机规则</div>
+        <div class="guide-badge">🕹️ 街机投币抢答</div>
         <div class="guide-text">
           <span>公屏发送 <b>A / B / C / D</b> 敲击按键</span>
           <span class="sep">|</span>
-          <span>极速答对触发 <b>HIT 暴击分数</b></span>
+          <span>点赞累积满 <b>300 / 600</b> 赞自动排除 1~2 个错误项</span>
           <span class="sep">|</span>
-          <span>登上底部<b>街机名人堂</b></span>
+          <span>送 <b>小心心/礼物</b> 直接揭晓正解答对，送礼越多狂送越多积分！</span>
         </div>
       </header>
 
-      <!-- 顶段 20% 街机通关积分条 -->
+      <!-- 顶段 街机通关积分条 (已移除题库名称和多少题) -->
       <section class="arcade-stage-header">
         <div class="arcade-stage-meta">
-          <span class="arcade-coin-tag">🪙 1UP · STAGE {{ quizState.questionIndex + 1 }}</span>
-          <span class="arcade-bank-tag">{{ quizRuntimeSettings.bank }} · 第{{ quizProgress }}题</span>
+          <span class="arcade-coin-tag">🪙 1UP · 街机抢答实况</span>
+          <div class="arcade-like-meter-strip">
+            <span class="meter-heart">❤️</span>
+            <span class="meter-num">{{ likeMilestoneInfo.current }}/{{ likeMilestoneInfo.target }} 赞</span>
+            <span class="meter-tip">({{ likeMilestoneInfo.stageLabel }})</span>
+          </div>
         </div>
         <div class="arcade-timer-badge" :class="{ urgent: displayTime <= 5 }">
           <span>TIME</span>
@@ -652,7 +718,7 @@ onBeforeUnmount(() => unsubscribeTheme());
       <section class="arcade-crt-console">
         <div class="crt-stage-pill">
           <span class="crt-pill-dot"></span>
-          <span>STAGE {{ quizState.questionIndex + 1 }} · 实时抢答机台</span>
+          <span>🕹️ 街机微动开关抢答台</span>
           <span class="crt-first-blood-hint">{{ firstBloodBanner }}</span>
         </div>
 
@@ -822,16 +888,16 @@ onBeforeUnmount(() => unsubscribeTheme());
         <div class="guide-text">
           <span>公屏进言 <b>A / B / C / D</b> 应试夺魁</span>
           <span class="sep">|</span>
-          <span>点赞积攒功名福泽</span>
+          <span>万民点赞满 <b>300 / 600</b> 赞御赐排除 1~2 个错项</span>
           <span class="sep">|</span>
-          <span>轻触或点击底部<b>金科皇榜抽屉</b>查阅榜单</span>
+          <span>敬奉 <b>小心心/贡礼</b> 御批正解答对，贡礼越丰狂赏功名积分！</span>
         </div>
       </header>
 
-      <!-- 75% 沉浸全屏圣旨题卡大舞台 -->
+      <!-- 75% 沉浸全屏圣旨题卡大舞台 (已移除第几题) -->
       <section class="imperial-hero-scroll">
         <div class="imperial-plaque-top">
-          <span class="plaque-tag">🏮 御前殿试 · 第 {{ quizProgress }} 题</span>
+          <span class="plaque-tag">🏮 御前殿试 · 钦点夺魁</span>
           <div class="plaque-timer" :class="{ urgent: displayTime <= 5 }">
             <span>⏱ 钦定时刻</span>
             <strong>{{ displayTime }}s</strong>
@@ -842,6 +908,24 @@ onBeforeUnmount(() => unsubscribeTheme());
         <div class="scroll-canvas-body">
           <div class="scroll-seal-mark">【殿试】</div>
           <h1 class="scroll-hero-title">{{ quizState.question.title }}</h1>
+        </div>
+
+        <!-- 万民点赞排除福泽条 -->
+        <div class="theme-like-energy-meter imperial-meter">
+          <div class="meter-head">
+            <div class="meter-title">
+              <span class="meter-heart">❤️</span>
+              <strong>万民点赞福泽 {{ likeMilestoneInfo.current }} / {{ likeMilestoneInfo.target }} 赞</strong>
+            </div>
+            <span class="meter-stage-tip">{{ likeMilestoneInfo.stageLabel }}</span>
+          </div>
+          <div class="meter-bar-track">
+            <div class="meter-bar-fill" :style="{ width: `${likeMilestoneInfo.percent}%` }"></div>
+          </div>
+          <div v-if="likeMilestoneInfo.eliminatedOptions.length" class="meter-elim-tags">
+            <span>💥 错误项已排除：</span>
+            <b v-for="opt in likeMilestoneInfo.eliminatedOptions" :key="opt" class="elim-badge">【选项 {{ opt }} ✕】</b>
+          </div>
         </div>
 
         <!-- 四柱御批印章大按键 -->
@@ -1080,6 +1164,141 @@ onBeforeUnmount(() => unsubscribeTheme());
 }
 .theme-gameplay-guide.imperial-guide .guide-text b {
   color: #fde047;
+}
+
+/* ============================================================================
+   通用全员点赞助力进度条与排除效果
+   ============================================================================ */
+.theme-like-energy-meter {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 18px;
+  padding: 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+}
+.theme-like-energy-meter.notebook-meter {
+  background: #f1f5f9;
+  border: 2px dashed #cbd5e1;
+  margin-bottom: 20px;
+}
+.theme-like-energy-meter.imperial-meter {
+  background: rgba(254, 243, 199, 0.12);
+  border: 2px solid #b45309;
+  margin: 0 0 24px;
+}
+.meter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.meter-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  font-weight: 800;
+  color: #f8fafc;
+}
+.notebook-meter .meter-title { color: #0f172a; }
+.imperial-meter .meter-title { color: #fef08a; }
+.meter-heart {
+  font-size: 22px;
+  animation: heartPulse 1.2s infinite;
+}
+@keyframes heartPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.25); }
+}
+.meter-stage-tip {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fbbf24;
+}
+.notebook-meter .meter-stage-tip { color: #d97706; }
+.imperial-meter .meter-stage-tip { color: #fde047; }
+.meter-bar-track {
+  width: 100%;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.notebook-meter .meter-bar-track { background: #e2e8f0; }
+.meter-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f43f5e 0%, #ec4899 50%, #fbbf24 100%);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 12px rgba(244, 63, 94, 0.6);
+}
+.meter-elim-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  color: #ef4444;
+  font-weight: 800;
+  margin-top: 2px;
+}
+.elim-badge {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid #ef4444;
+  color: #fca5a5;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+/* 街机顶部点赞条 */
+.arcade-like-meter-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #18181b;
+  border: 2px solid #52525b;
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 18px;
+  font-weight: 800;
+}
+.arcade-like-meter-strip .meter-num {
+  color: #fbbf24;
+}
+.arcade-like-meter-strip .meter-tip {
+  color: #a1a1aa;
+  font-size: 14px;
+}
+
+/* 赛博 HUD 点赞条 */
+.cockpit-hud-bar .hud-likes-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(6, 182, 212, 0.15);
+  border: 1px solid #06b6d4;
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 18px;
+  color: #f8fafc;
+}
+.cockpit-hud-bar .hud-likes-chip small {
+  color: #38bdf8;
+  font-size: 14px;
+}
+
+/* 全主题排除选项醒目样式 */
+.asym-opt-box.elim,
+.nb-choice-cell.elim,
+.radial-wing-channel.elim,
+.arcade-3d-btn.elim,
+.imperial-tablet-btn.elim {
+  opacity: 0.35 !important;
+  filter: grayscale(0.8) !important;
+  text-decoration: line-through !important;
+  border-color: #ef4444 !important;
+  pointer-events: none;
 }
 
 /* ============================================================================

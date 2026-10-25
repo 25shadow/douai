@@ -76,7 +76,7 @@ export function createSimulationMessage(index: number, gameId: SimulationGameId 
   const id = `demo-${index}`;
 
   if (eventIndex === 1) {
-    const count = (userIndex + 1) * 5;
+    const count = 40 + (userIndex % 4) * 25;
     return { id, method: 'WebcastLikeMessage' as DyMessage['method'], user, content: `为主播点赞了(${count})` };
   }
 

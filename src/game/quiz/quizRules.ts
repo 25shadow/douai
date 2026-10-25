@@ -11,12 +11,13 @@ export type GiftRule = {
 };
 
 export const defaultLikeRules: LikeRule[] = [
-  { threshold: 500, effect: 'eliminate', amount: 1 },
-  { threshold: 1000, effect: 'extend-time', amount: 10 }
+  { threshold: 300, effect: 'eliminate', amount: 1 },
+  { threshold: 600, effect: 'eliminate', amount: 1 },
+  { threshold: 1000, effect: 'extend-time', amount: 15 }
 ];
 export const defaultGiftRules: GiftRule[] = [
   { minimumCoins: 1, effect: 'answer' },
-  { minimumCoins: 11, effect: 'win' }
+  { minimumCoins: 30, effect: 'win' }
 ];
 
 export function parseQuizAnswer(

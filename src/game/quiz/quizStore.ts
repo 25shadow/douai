@@ -492,14 +492,14 @@ function handleLike(message: DyMessage) {
       const eliminated = wrongOptions.sort(() => Math.random() - 0.5).slice(0, count);
       quizState.eliminatedOptions.push(...eliminated);
       if (eliminated.length) {
-        quizState.assistMessage = `点赞助力：选项 ${eliminated.join('、')} 已排除`;
-        announce(`点赞达到${rule.threshold}，已排除${eliminated.length}个错误选项`, 'like');
+        quizState.assistMessage = `❤️ 全员点赞达成 ${rule.threshold} 赞！已排除错误选项【${eliminated.join('、')}】`;
+        announce(`全员点赞达成${rule.threshold}赞，已排除错误选项${eliminated.join('、')}`, 'like');
       }
       return;
     }
     quizState.timeLeft += Math.max(1, Math.floor(rule.amount) || 1);
-    quizState.assistMessage = `${quizState.assistMessage} · 答题时间延长 ${rule.amount} 秒`.trim();
-    announce(`点赞助力，答题时间延长${rule.amount}秒`, 'like');
+    quizState.assistMessage = `❤️ 全员点赞达成 ${rule.threshold} 赞！答题时间延长 ${rule.amount} 秒`;
+    announce(`全员点赞达成${rule.threshold}赞，答题时间延长${rule.amount}秒`, 'like');
   });
 }
 
@@ -527,35 +527,26 @@ function handleGift(message: DyMessage) {
   const price = unitPrice * count;
   const effect = getGiftEffect(price, config.giftRules);
 
-  if (effect === 'answer') {
-    submitAnswer(userId, name, avatar, quizState.question.answer, 'gift', true);
-    const player = ensurePlayer(userId, name, avatar);
-    player.points += 5;
-    quizState.status = `${name} 送礼答对了`;
-    quizState.assistMessage = `🎁 ${name} 送出${giftName}×${count} · 触发自动答对特权`;
-    quizState.giftEffects.unshift({
-      id: `gift-${now}-${Math.random().toString(36).slice(2, 6)}`,
-      userName: name,
-      userAvatar: avatar,
-      giftName,
-      giftIcon: message.gift.icon,
-      count,
-      effectLabel: '特权免答 +20分'
-    });
-    quizState.giftEffects.splice(5);
-  } else if (effect === 'win') {
+  // 1. 核心互动玩法：送任何礼物均触发神助直接答对本题！
+  submitAnswer(userId, name, avatar, quizState.question.answer, 'gift', true);
+
+  // 2. 送礼越多赠送直接积分越多 (1抖币=10直接积分，保底20积分)
+  const bonusPoints = Math.max(20, price * 10);
+  const player = ensurePlayer(userId, name, avatar);
+  player.points += bonusPoints;
+  player.lastDelta = bonusPoints;
+
+  // 3. 大额礼物 (≥30 抖币，如热气球、嘉年华) 直接保送本题通关夺魁
+  if (effect === 'win' || price >= 30) {
     clearVoiceOwner('quiz', ['answer', 'gift', 'like', 'quiz']);
-    const player = ensurePlayer(userId, name, avatar);
     player.score += 2;
-    player.streak += 1;
-    player.points += 50;
-    player.lastDelta = 50;
+    player.streak += 3;
     quizState.winner = { name, giftName, avatar };
     quizState.phase = 'reveal';
     quizState.revealAnswer = true;
     quizState.timeLeft = Math.max(1, config.revealTime);
-    quizState.status = `${name} 送出 ${giftName}，赢得本题`;
-    quizState.assistMessage = `🚀 ${name} 送出${giftName}×${count} · 直接通关夺魁`;
+    quizState.status = `${name} 送礼保送通关！`;
+    quizState.assistMessage = `👑 @${name} 送出${giftName}×${count} · 狂送+${bonusPoints}分直接保送通关！`;
     quizState.giftEffects.unshift({
       id: `gift-${now}-${Math.random().toString(36).slice(2, 6)}`,
       userName: name,
@@ -563,13 +554,14 @@ function handleGift(message: DyMessage) {
       giftName,
       giftIcon: message.gift.icon,
       count,
-      effectLabel: '保送通关 +50分'
+      effectLabel: `通关夺魁 +${bonusPoints}分`
     });
     quizState.giftEffects.splice(5);
-    announce(`${name} 送礼通关，赢得本题`, 'gift');
+    announce(`感谢${name}送出${giftName}，保送直接通关夺魁，赠送${bonusPoints}积分！`, 'gift');
   } else {
-    const player = ensurePlayer(userId, name, avatar);
-    player.points += 10;
+    player.streak += 1;
+    quizState.status = `${name} 送礼直接答对！`;
+    quizState.assistMessage = `🎁 @${name} 送出${giftName}×${count} · 锦囊神助直接答对 +${bonusPoints}分！`;
     quizState.giftEffects.unshift({
       id: `gift-${now}-${Math.random().toString(36).slice(2, 6)}`,
       userName: name,
@@ -577,9 +569,10 @@ function handleGift(message: DyMessage) {
       giftName,
       giftIcon: message.gift.icon,
       count,
-      effectLabel: '送礼助威 +10分'
+      effectLabel: `神助答对 +${bonusPoints}分`
     });
     quizState.giftEffects.splice(5);
+    announce(`感谢${name}送出${giftName}，锦囊神助直接答对，赠送${bonusPoints}分！`, 'gift');
   }
 }
 
