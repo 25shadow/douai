@@ -648,10 +648,17 @@ onBeforeUnmount(() => unsubscribeTheme());
         </div>
       </section>
 
-      <!-- 中段 45% 街机 4 色立体大按键 (HIT 暴击弹窗) -->
+      <!-- 中段 街机 4 色立体大按键 + CRT 战况显像管 -->
       <section class="arcade-crt-console">
+        <div class="crt-stage-pill">
+          <span class="crt-pill-dot"></span>
+          <span>STAGE {{ quizState.questionIndex + 1 }} · 实时抢答机台</span>
+          <span class="crt-first-blood-hint">{{ firstBloodBanner }}</span>
+        </div>
+
         <h1 class="crt-question-heading">{{ quizState.question.title }}</h1>
 
+        <!-- 4 色 3D 立体大按键 (微动开关质感) -->
         <div class="crt-buttons-4col">
           <div
             v-for="item in answerStats"
@@ -663,40 +670,98 @@ onBeforeUnmount(() => unsubscribeTheme());
             ]"
           >
             <div class="btn-top-cap">
-              <span class="btn-key">{{ item.option }}</span>
-              <span class="btn-text">{{ item.text }}</span>
-              <span class="btn-stat">{{ item.isCorrect ? 'WIN!' : item.isEliminated ? 'OUT' : `${item.percent}%` }}</span>
+              <div class="btn-cap-left">
+                <span class="btn-key">{{ item.option }}</span>
+              </div>
+              <div class="btn-cap-mid">
+                <span class="btn-text">{{ item.text }}</span>
+                <span class="btn-sub">{{ item.count }} 人敲击</span>
+              </div>
+              <div class="btn-cap-right">
+                <span class="btn-stat">{{ item.isCorrect ? 'WIN!' : item.isEliminated ? 'OUT' : `${item.percent}%` }}</span>
+                <div class="btn-mini-meter">
+                  <div class="meter-fill" :style="{ width: `${item.percent}%` }"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- 击打连击瞬时暴击弹窗 -->
-        <div class="crt-hit-combo-bar">
-          <div v-if="liveAnswerFeed.length" class="hit-chips-list">
+        <!-- CRT 显像管即时战况屏幕 (充满机台，彻底消除黑屏空白) -->
+        <div class="arcade-crt-monitor">
+          <div class="monitor-screen-header">
+            <div class="monitor-title">
+              <span class="crt-blink-dot"></span>
+              <span>⚡ REALTIME HIT FEED · 实时敲击连击伤害</span>
+            </div>
+            <span class="monitor-mode">P1 READY</span>
+          </div>
+
+          <!-- 有人答题时：生动展示连击暴击伤害流 -->
+          <div v-if="liveAnswerFeed.length" class="monitor-hits-grid">
             <div
-              v-for="ans in liveAnswerFeed.slice(0, 4)"
+              v-for="ans in liveAnswerFeed"
               :key="ans.id"
-              class="hit-chip-pop"
-              :class="{ critical: ans.correct }"
+              class="hit-card-item"
+              :class="{ critical: ans.correct, miss: !ans.correct }"
             >
               <img :src="ans.avatar" class="hit-av" alt="" />
-              <div class="hit-info">
-                <strong>{{ ans.name }}</strong>
-                <small>{{ ans.tag }}</small>
+              <div class="hit-meta">
+                <div class="hit-user-line">
+                  <strong class="hit-name">{{ ans.name }}</strong>
+                  <span class="hit-option-badge">按键 {{ ans.option }}</span>
+                </div>
+                <div class="hit-streak-line">
+                  <small>{{ ans.tag }}</small>
+                </div>
               </div>
-              <b class="hit-damage">{{ ans.correct ? `HIT +${ans.delta}` : `MISS ${ans.option}` }}</b>
+              <div class="hit-dmg-badge">
+                <strong>{{ ans.correct ? `+${ans.delta}` : 'MISS' }}</strong>
+                <small>{{ ans.correct ? 'CRITICAL' : 'FAILED' }}</small>
+              </div>
             </div>
           </div>
-          <div v-else class="hit-empty-text">
-            <span>💥 敲击弹幕发送 A / B / C / D，按键下陷并产生 HIT 暴击伤害！</span>
+
+          <!-- 尚未有人答题时：充满活力的街机待机雷达与规则奖励面板，彻底消除中间黑块！ -->
+          <div v-else class="monitor-standby-panel">
+            <div class="standby-marquee">
+              <span class="marquee-icon">🕹️</span>
+              <span class="marquee-text">WAITING FOR PLAYER INPUT · 等待弹幕敲击按键</span>
+            </div>
+            <div class="standby-bounty-cards">
+              <div class="bounty-card gold">
+                <span class="bounty-icon">👑</span>
+                <div class="bounty-info">
+                  <strong>FIRST BLOOD 首答暴击</strong>
+                  <span>+100 极速暴击分 · 震撼全屏特效</span>
+                </div>
+              </div>
+              <div class="bounty-card blue">
+                <span class="bounty-icon">⚡</span>
+                <div class="bounty-info">
+                  <strong>COMBO 连胜暴击</strong>
+                  <span>连续答对连胜倍数翻倍 · 积分狂飙</span>
+                </div>
+              </div>
+              <div class="bounty-card green">
+                <span class="bounty-icon">🎮</span>
+                <div class="bounty-info">
+                  <strong>即时受击反馈</strong>
+                  <span>公屏输入 A/B/C/D 对应按键真实下沉</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      <!-- 底段 35% 像素高分名人堂 (TOP 1/2/3 像素奖杯 + 其余高分网格) -->
+      <!-- 底段 像素高分名人堂 (TOP 1/2/3 像素奖杯 + 其余高分网格) -->
       <section class="arcade-hall-fame-bottom">
         <div class="hall-header">
-          <span class="hall-title">🏆 街机 HIGH SCORES 名人堂</span>
+          <div class="hall-title-group">
+            <span class="hall-title">🏆 街机 HIGH SCORES 名人堂</span>
+            <span class="hall-sub">TOP 12 巅峰玩家榜</span>
+          </div>
           <span class="hall-meta">{{ totalParticipantCount }} 位玩家在榜</span>
         </div>
 
@@ -705,7 +770,7 @@ onBeforeUnmount(() => unsubscribeTheme());
             v-for="p in rankedPlayers.slice(0, 12)"
             :key="p.id"
             class="hall-cell"
-            :class="{ top1: p.rank === 1, top3: p.rank <= 3 }"
+            :class="{ top1: p.rank === 1, top2: p.rank === 2, top3: p.rank === 3 }"
           >
             <div class="hall-cell-head">
               <span class="hall-rank">{{ p.rank === 1 ? '👑 1ST' : p.rank === 2 ? '🥈 2ND' : p.rank === 3 ? '🥉 3RD' : `#${p.rank}` }}</span>
@@ -716,10 +781,32 @@ onBeforeUnmount(() => unsubscribeTheme());
             <strong class="hall-pts">{{ p.points }} <small>PTS</small></strong>
           </div>
         </div>
-        <div v-else class="hall-empty-state">
-          <div class="hall-empty-icon">🕹️</div>
-          <strong>名人堂虚位以待</strong>
-          <p>公屏发送 A/B/C/D 抢答得分，冲击今日最高分并载入名人堂！</p>
+
+        <!-- 空态领奖台插槽，彻底占满底部空间 -->
+        <div v-else class="hall-empty-podium">
+          <div class="empty-podium-slots">
+            <div class="podium-slot silver">
+              <span class="slot-crown">🥈 2ND</span>
+              <div class="slot-avatar-placeholder">?</div>
+              <strong>亚军擂主</strong>
+              <small>虚位以待</small>
+            </div>
+            <div class="podium-slot gold champion">
+              <span class="slot-crown">👑 1ST</span>
+              <div class="slot-avatar-placeholder">🏆</div>
+              <strong>殿堂冠军</strong>
+              <small>虚位以待</small>
+            </div>
+            <div class="podium-slot bronze">
+              <span class="slot-crown">🥉 3RD</span>
+              <div class="slot-avatar-placeholder">?</div>
+              <strong>季军先锋</strong>
+              <small>虚位以待</small>
+            </div>
+          </div>
+          <div class="hall-empty-cta">
+            <span>🕹️ 本局街机挑战刚刚开启，公屏发送 A / B / C / D 成为首位载入街机名人堂的玩家！</span>
+          </div>
         </div>
       </section>
     </div>
@@ -2167,127 +2254,348 @@ onBeforeUnmount(() => unsubscribeTheme());
   color: #ef4444;
 }
 
-/* 中段 45% CRT 街机按键 */
+/* 中段 街机 CRT 操控台 (充分利用空间，规整平衡) */
 .arcade-crt-console {
-  flex: 0 0 760px;
-  margin: 20px 32px 0;
-  background: #09090b;
+  flex: 1.15;
+  margin: 16px 32px 0;
+  background: linear-gradient(180deg, #18181b 0%, #09090b 100%);
   border: 4px solid #3f3f46;
   border-radius: 28px;
-  padding: 28px 36px;
+  padding: 24px 32px;
   display: flex;
   flex-direction: column;
+  box-shadow: inset 0 2px 8px rgba(255, 255, 255, 0.08), 0 16px 40px rgba(0, 0, 0, 0.6);
+  min-height: 0;
+}
+.crt-stage-pill {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #a1a1aa;
+  margin-bottom: 14px;
+}
+.crt-pill-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 10px #22c55e;
+}
+.crt-first-blood-hint {
+  margin-left: auto;
+  color: #fbbf24;
+  font-size: 16px;
+  font-weight: 700;
 }
 .crt-question-heading {
-  margin: 0 0 28px;
-  font-size: 40px;
+  margin: 0 0 20px;
+  font-size: 38px;
   font-weight: 900;
-  line-height: 1.4;
+  line-height: 1.35;
   color: #f8fafc;
 }
+
+/* 4 色 3D 立体大按键 */
 .crt-buttons-4col {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 18px;
+  gap: 16px;
+  margin-bottom: 20px;
 }
 .arcade-3d-btn {
   border-radius: 20px;
-  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.45);
   cursor: pointer;
-  transition: transform 0.1s;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.arcade-3d-btn:active {
+  transform: translateY(4px);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.45);
 }
 .btn-top-cap {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 22px 24px;
+  padding: 18px 20px;
   border-radius: 18px;
+  gap: 14px;
 }
-.btn-color-A .btn-top-cap { background: #e11d48; color: #ffffff; }
-.btn-color-B .btn-top-cap { background: #0284c7; color: #ffffff; }
-.btn-color-C .btn-top-cap { background: #16a34a; color: #ffffff; }
-.btn-color-D .btn-top-cap { background: #d97706; color: #ffffff; }
+.btn-color-A .btn-top-cap { background: linear-gradient(135deg, #f43f5e 0%, #be123c 100%); color: #ffffff; }
+.btn-color-B .btn-top-cap { background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #ffffff; }
+.btn-color-C .btn-top-cap { background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); color: #ffffff; }
+.btn-color-D .btn-top-cap { background: linear-gradient(135deg, #d97706 0%, #b45309 100%); color: #ffffff; }
+
+.btn-cap-left {
+  display: flex;
+  align-items: center;
+}
 .btn-key {
-  font-size: 32px;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  font-size: 28px;
   font-weight: 900;
+  display: grid;
+  place-items: center;
+}
+.btn-cap-mid {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .btn-text {
-  flex: 1;
-  margin: 0 16px;
   font-size: 26px;
   font-weight: 800;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.btn-sub {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.75);
+  font-weight: 600;
+}
+.btn-cap-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
 .btn-stat {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 900;
 }
+.btn-mini-meter {
+  width: 64px;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.meter-fill {
+  height: 100%;
+  background: #ffffff;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
 
-/* 暴击伤害弹窗流 */
-.crt-hit-combo-bar {
-  margin-top: 24px;
-  min-height: 70px;
+/* CRT 显像管即时战况屏幕 (消除黑屏死角) */
+.arcade-crt-monitor {
+  flex: 1;
+  min-height: 260px;
+  background: #050505;
+  border: 3px solid #27272a;
+  border-radius: 20px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.9);
+}
+.arcade-crt-monitor::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02));
+  background-size: 100% 4px, 6px 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+.monitor-screen-header {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed #3f3f46;
+  margin-bottom: 14px;
+}
+.monitor-title {
   display: flex;
   align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #fbbf24;
 }
-.hit-chips-list {
-  display: flex;
-  gap: 14px;
-  width: 100%;
+.crt-blink-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: crtPulse 1.2s infinite;
 }
-.hit-chip-pop {
+@keyframes crtPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.monitor-mode {
+  background: #27272a;
+  border: 1px solid #52525b;
+  color: #22c55e;
+  font-size: 14px;
+  font-weight: 900;
+  padding: 3px 10px;
+  border-radius: 6px;
+}
+
+/* 实时命中卡片流 */
+.monitor-hits-grid {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
   flex: 1;
+  overflow-y: auto;
+}
+.hit-card-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 14px;
+  padding: 8px 12px;
   border-radius: 12px;
-  background: #27272a;
-  border: 1px solid #52525b;
+  background: #18181b;
+  border: 1px solid #3f3f46;
 }
-.hit-chip-pop.critical {
+.hit-card-item.critical {
   border-color: #fbbf24;
-  background: #3f3f46;
+  background: rgba(251, 191, 36, 0.08);
 }
 .hit-av {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
+  object-fit: cover;
 }
-.hit-info {
+.hit-meta {
   flex: 1;
   display: flex;
   flex-direction: column;
 }
-.hit-info strong {
-  font-size: 20px;
+.hit-user-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
-.hit-info small {
+.hit-name {
+  font-size: 18px;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+.hit-option-badge {
   font-size: 14px;
-  color: #94a3b8;
+  font-weight: 800;
+  color: #38bdf8;
 }
-.hit-damage {
+.hit-streak-line small {
+  font-size: 13px;
+  color: #a1a1aa;
+}
+.hit-dmg-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.hit-dmg-badge strong {
   font-size: 20px;
   font-weight: 900;
   color: #fbbf24;
 }
-.hit-empty-text {
-  width: 100%;
-  text-align: center;
+.hit-card-item.miss .hit-dmg-badge strong {
   color: #71717a;
-  font-size: 22px;
+}
+.hit-dmg-badge small {
+  font-size: 11px;
+  color: #94a3b8;
 }
 
-/* 底段 37% 街机名人堂 */
-.arcade-hall-fame-bottom {
+/* 街机待机面板 (无答题时的全幅设计，消除空白黑区) */
+.monitor-standby-panel {
+  position: relative;
+  z-index: 2;
   flex: 1;
-  margin: 20px 32px 28px;
-  background: #27272a;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.standby-marquee {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: 12px;
+  padding: 10px 16px;
+  color: #fbbf24;
+  font-size: 18px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+.standby-bounty-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  flex: 1;
+}
+.bounty-card {
+  background: #18181b;
+  border: 2px solid #3f3f46;
+  border-radius: 14px;
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.bounty-card.gold {
+  border-color: rgba(251, 191, 36, 0.5);
+  background: rgba(251, 191, 36, 0.05);
+}
+.bounty-card.blue {
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(56, 189, 248, 0.05);
+}
+.bounty-card.green {
+  border-color: rgba(34, 197, 94, 0.5);
+  background: rgba(34, 197, 94, 0.05);
+}
+.bounty-icon {
+  font-size: 32px;
+  margin-bottom: 6px;
+}
+.bounty-info strong {
+  display: block;
+  font-size: 16px;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+.bounty-info span {
+  display: block;
+  font-size: 13px;
+  color: #a1a1aa;
+  line-height: 1.35;
+}
+
+/* 底段 街机名人堂 */
+.arcade-hall-fame-bottom {
+  flex: 0.88;
+  margin: 16px 32px 24px;
+  background: #18181b;
   border: 3px solid #3f3f46;
   border-radius: 28px;
-  padding: 24px 32px;
+  padding: 22px 30px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -2296,28 +2604,39 @@ onBeforeUnmount(() => unsubscribeTheme());
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: 16px;
+  padding-bottom: 14px;
   border-bottom: 2px solid #3f3f46;
+}
+.hall-title-group {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
 }
 .hall-title {
   font-size: 26px;
   font-weight: 900;
   color: #fbbf24;
 }
-.hall-meta {
-  font-size: 20px;
+.hall-sub {
+  font-size: 16px;
   color: #a1a1aa;
 }
+.hall-meta {
+  font-size: 18px;
+  color: #a1a1aa;
+}
+
+/* 玩家在榜网格 */
 .hall-players-grid {
   flex: 1;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 14px;
-  padding-top: 18px;
+  padding-top: 16px;
   overflow-y: auto;
 }
 .hall-cell {
-  background: #18181b;
+  background: #09090b;
   border: 2px solid #3f3f46;
   border-radius: 16px;
   padding: 12px 14px;
@@ -2327,10 +2646,15 @@ onBeforeUnmount(() => unsubscribeTheme());
 }
 .hall-cell.top1 {
   border-color: #fbbf24;
-  background: rgba(251, 191, 36, 0.1);
+  background: rgba(251, 191, 36, 0.12);
+}
+.hall-cell.top2 {
+  border-color: #cbd5e1;
+  background: rgba(203, 213, 225, 0.08);
 }
 .hall-cell.top3 {
-  border-color: #e4e4e7;
+  border-color: #d97706;
+  background: rgba(217, 119, 6, 0.08);
 }
 .hall-cell-head {
   width: 100%;
@@ -2361,27 +2685,86 @@ onBeforeUnmount(() => unsubscribeTheme());
   font-weight: 900;
   color: #22c55e;
 }
-.hall-empty-state {
+
+/* 空态领奖台插槽 (完全填充底部高度，充满像素街机仪式感) */
+.hall-empty-podium {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-top: 14px;
+}
+.empty-podium-slots {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  flex: 1;
+  align-items: end;
+  margin-bottom: 16px;
+}
+.podium-slot {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 18px 14px;
+  border-radius: 18px;
+  border: 2px dashed #52525b;
   text-align: center;
-  color: #71717a;
 }
-.hall-empty-icon {
-  font-size: 64px;
-  margin-bottom: 12px;
+.podium-slot.champion {
+  border-color: #fbbf24;
+  background: rgba(251, 191, 36, 0.06);
+  min-height: 220px;
 }
-.hall-empty-state strong {
-  font-size: 28px;
+.podium-slot.silver {
+  border-color: #cbd5e1;
+  background: rgba(203, 213, 225, 0.04);
+  min-height: 190px;
+}
+.podium-slot.bronze {
+  border-color: #d97706;
+  background: rgba(217, 119, 6, 0.04);
+  min-height: 170px;
+}
+.slot-crown {
+  font-size: 20px;
+  font-weight: 900;
   color: #fbbf24;
   margin-bottom: 8px;
 }
-.hall-empty-state p {
+.podium-slot.silver .slot-crown { color: #cbd5e1; }
+.podium-slot.bronze .slot-crown { color: #d97706; }
+.slot-avatar-placeholder {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #27272a;
+  border: 2px dashed #52525b;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  margin-bottom: 10px;
+  color: #a1a1aa;
+}
+.podium-slot strong {
   font-size: 20px;
-  margin: 0;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+.podium-slot small {
+  font-size: 15px;
+  color: #a1a1aa;
+}
+.hall-empty-cta {
+  background: #27272a;
+  border: 1px solid #3f3f46;
+  border-radius: 14px;
+  padding: 12px 20px;
+  text-align: center;
+  color: #d4d4d8;
+  font-size: 18px;
+  font-weight: 700;
 }
 
 /* ============================================================================
