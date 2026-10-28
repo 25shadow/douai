@@ -12,7 +12,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from voice_config import default_voice_config, normalize_voice_config
 
-DB_PATH = Path(__file__).with_name("douai.sqlite3")
+DATA_DIR = Path(os.environ["DOUAI_DATA_DIR"]).expanduser() if os.environ.get("DOUAI_DATA_DIR") else Path(__file__).parent
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = DATA_DIR / "douai.sqlite3"
 DEFAULT_SIMULATION_CONFIG = {
     "durationMinutes": 5,
     "audience": 120,

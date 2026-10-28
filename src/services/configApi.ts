@@ -71,6 +71,10 @@ const fallback: ProjectConfig = {
 
 type LegacyStorage = Pick<Storage, 'getItem' | 'removeItem'>;
 type Fetcher = typeof fetch;
+const API_BASE_URL = (import.meta as ImportMeta & { env?: { PROD?: boolean } }).env?.PROD
+  ? 'http://127.0.0.1:8787'
+  : '';
+const apiUrl = (path: string) => `${API_BASE_URL}${path}`;
 
 function getBrowserStorage(storage?: LegacyStorage): LegacyStorage | undefined {
   if (storage) return storage;
@@ -109,7 +113,7 @@ export async function migrateLegacyBrowserConfig(fetcher: Fetcher = fetch, provi
   if (!keys.length) return null;
 
   try {
-    const response = await fetcher('/api/config/migrate-legacy', {
+    const response = await fetcher(apiUrl('/api/config/migrate-legacy'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(legacy)
@@ -128,7 +132,7 @@ export async function migrateLegacyBrowserConfig(fetcher: Fetcher = fetch, provi
 export async function loadConfig(fetcher: Fetcher = fetch): Promise<ProjectConfig> {
   try {
     await migrateLegacyBrowserConfig(fetcher);
-    const response = await fetcher('/api/config');
+    const response = await fetcher(apiUrl('/api/config'));
     if (!response.ok) throw new Error('读取请求失败');
     const data = await response.json();
     return { ...fallback, ...data, voiceConfig: normalizeVoiceConfig(data.voiceConfig, data) };
@@ -138,7 +142,7 @@ export async function loadConfig(fetcher: Fetcher = fetch): Promise<ProjectConfi
 }
 
 export async function saveVoiceConfig(config: VoiceConfig, fetcher: Fetcher = fetch): Promise<VoiceConfig> {
-  const response = await fetcher('/api/config/voice', {
+  const response = await fetcher(apiUrl('/api/config/voice'), {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(validateVoiceConfig(config))
   });
   const result = await response.json();
@@ -148,7 +152,7 @@ export async function saveVoiceConfig(config: VoiceConfig, fetcher: Fetcher = fe
 
 export async function saveConfig(config: ProjectConfig, fetcher: Fetcher = fetch): Promise<void> {
   try {
-    const response = await fetcher('/api/config', {
+    const response = await fetcher(apiUrl('/api/config'), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config)
@@ -161,7 +165,7 @@ export async function saveConfig(config: ProjectConfig, fetcher: Fetcher = fetch
 }
 
 export async function generateQuestionBank(input: { theme: string; count: number; difficulty: string; aiConfig: ProjectConfig['aiConfig'] }) {
-  const response = await fetch('/api/ai/generate', {
+  const response = await fetch(apiUrl('/api/ai/generate'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...input, ...input.aiConfig })

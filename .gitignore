@@ -35,4 +35,9 @@ test/
 .playwright-cli/
 output/
 .pnpm-store
+.venv-sidecar/
+src-tauri/target/
+src-tauri/binaries/*.exe
+output/pyinstaller-build/
+output/pyinstaller-spec/
 

@@ -4,14 +4,27 @@
 
 ## 开发
 
-需要 Node.js、npm 和 Python 3。
+需要 Node.js、pnpm 和 Python 3。
 
 ```sh
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 前端由 Vite 提供，配置 API 使用本地 Python 服务，默认地址为 `http://127.0.0.1:8787`。
+
+## Windows 桌面打包
+
+项目使用 Tauri 2 打包，应用版本为 `1.0.0`。Windows 构建需要 Rust、
+WebView2 和 NSIS。
+
+```powershell
+pnpm run sidecar:build
+pnpm run tauri:build
+```
+
+安装包输出到 `src-tauri/target/release/bundle/nsis/`。打包后的 Python API
+作为 sidecar 随应用启动，SQLite 配置保存在当前用户的应用数据目录中。
 
 ## 功能
 

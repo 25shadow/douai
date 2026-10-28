@@ -1,12 +1,33 @@
 import tempfile
 import unittest
 from pathlib import Path
+import os
+import subprocess
+import sys
 from unittest.mock import patch
 
 import config_server
 
 
 class ConfigServerTests(unittest.TestCase):
+    def test_database_path_uses_douai_data_dir(self):
+        with tempfile.TemporaryDirectory() as data_dir:
+            env = os.environ.copy()
+            env["DOUAI_DATA_DIR"] = data_dir
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    "import config_server; print(config_server.DB_PATH)",
+                ],
+                cwd=Path(__file__).parent.parent,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.assertEqual(Path(result.stdout.strip()), Path(data_dir) / "douai.sqlite3")
+
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.db_path = Path(self.temp_dir.name) / "test.sqlite3"
