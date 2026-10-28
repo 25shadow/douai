@@ -38,6 +38,7 @@ output/
 .venv-sidecar/
 src-tauri/target/
 src-tauri/binaries/*.exe
+*.msi
 output/pyinstaller-build/
 output/pyinstaller-spec/
 

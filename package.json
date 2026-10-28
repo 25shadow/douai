@@ -11,6 +11,7 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "sidecar:build": "pwsh -File scripts/build-sidecar.ps1",
+    "package:windows": "pwsh -File scripts/build-windows-msi.ps1",
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "build-only": "vite build",

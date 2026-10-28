@@ -19,11 +19,11 @@ pnpm dev
 WebView2 和 NSIS。
 
 ```powershell
-pnpm run sidecar:build
-pnpm run tauri:build
+pnpm run package:windows
 ```
 
-安装包输出到 `src-tauri/target/release/bundle/nsis/`。打包后的 Python API
+MSI 安装包会复制到项目根目录下一层的 `output/windows/DouAi_1.0.0_x64.msi`，原始构建产物位于
+`src-tauri/target/release/bundle/msi/`。打包后的 Python API
 作为 sidecar 随应用启动，SQLite 配置保存在当前用户的应用数据目录中。
 
 ## 功能
