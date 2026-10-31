@@ -16,7 +16,7 @@ try {
 
   $destinationDir = Join-Path $root "output\windows"
   New-Item -ItemType Directory -Force $destinationDir | Out-Null
-  $destination = Join-Path $destinationDir "DouAi_1.0.0_x64.msi"
+  $destination = Join-Path $destinationDir "DouAi_1.0.3_x64.msi"
   Copy-Item -Force $msi.FullName $destination
   Write-Output "MSI installer: $destination"
 }

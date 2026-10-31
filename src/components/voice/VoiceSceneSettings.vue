@@ -13,7 +13,8 @@
       </span>
     </div>
 
-    <!-- 5大场景卡片列表 -->
+    <details class="scene-settings-disclosure">
+      <summary>配置各类事件播报 <span>展开 5 类互动事件</span></summary>
     <div class="scenes-cards-grid">
       <article 
         v-for="(name, key) in sceneNames" 
@@ -54,6 +55,10 @@
           />
 
           <div class="event-card-footer">
+            <div class="output-switches">
+              <label><input v-model="config.scenes[key].output.voice" type="checkbox" /> 朗读</label>
+              <label><input v-model="config.scenes[key].output.text" type="checkbox" /> 发文字</label>
+            </div>
             <!-- 可点击动态变量标签 -->
             <div class="variables-selector">
               <span class="var-title">点击插入变量：</span>
@@ -87,6 +92,7 @@
         </div>
       </article>
     </div>
+    </details>
   </section>
 </template>
 
@@ -142,6 +148,30 @@ function insertVariable(key: LiveVoiceScene, variable: string) {
   gap: 10px;
 }
 
+.scene-settings-disclosure > summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8fafc;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-main);
+}
+
+.scene-settings-disclosure > summary span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.scene-settings-disclosure[open] .scenes-cards-grid {
+  margin-top: 10px;
+}
+
 .top-title-wrap {
   display: flex;
   align-items: center;
@@ -149,7 +179,7 @@ function insertVariable(key: LiveVoiceScene, variable: string) {
 }
 
 .brand-icon {
-  color: #10b981;
+  color: #0b8f69;
 }
 
 .top-title-wrap h3 {
@@ -175,7 +205,7 @@ function insertVariable(key: LiveVoiceScene, variable: string) {
 }
 
 .active-scenes-badge b {
-  color: #10b981;
+  color: #0b8f69;
 }
 
 .scenes-cards-grid {
@@ -203,8 +233,8 @@ function insertVariable(key: LiveVoiceScene, variable: string) {
 
 .scene-event-card.enabled {
   background: #ffffff;
-  border-color: rgba(16, 185, 129, 0.4);
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.06);
+  border-color: rgba(11, 143, 105, 0.4);
+  box-shadow: 0 4px 14px rgba(11, 143, 105, 0.06);
 }
 
 .event-card-header {
@@ -237,8 +267,8 @@ function insertVariable(key: LiveVoiceScene, variable: string) {
   color: #db2777;
 }
 .scene-icon-wrap.follow {
-  background: #ecfdf5;
-  color: #059669;
+  background: #e7f5ef;
+  color: #087a5a;
 }
 .scene-icon-wrap.join {
   background: #eff6ff;
@@ -299,7 +329,7 @@ function insertVariable(key: LiveVoiceScene, variable: string) {
 }
 
 .mac-switch input:checked + .switch-slider {
-  background-color: #10b981;
+  background-color: #0b8f69;
 }
 
 .mac-switch input:checked + .switch-slider:before {
@@ -340,9 +370,9 @@ textarea {
 }
 
 textarea:focus {
-  border-color: #10b981;
+  border-color: #0b8f69;
   background: #ffffff;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15);
+  box-shadow: 0 0 0 2px rgba(11, 143, 105, 0.15);
 }
 
 .event-card-footer {
@@ -352,6 +382,19 @@ textarea:focus {
   flex-wrap: wrap;
   gap: 10px;
 }
+.output-switches { display: flex; gap: 8px; margin-bottom: 10px; }
+.output-switches label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.output-switches input { accent-color: #0b8f69; }
 
 .variables-selector {
   display: flex;
@@ -405,6 +448,6 @@ textarea:focus {
   outline: none;
 }
 .cooldown-box input:focus {
-  border-color: #10b981;
+  border-color: #0b8f69;
 }
 </style>

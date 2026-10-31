@@ -36,6 +36,22 @@ test('initialization failure blocks playback and retry applies saved configurati
   assert.equal(runtime.getState().ready, true);
   assert.equal(runtime.speak('disabled'), false);
 });
+test('voice initialization retries a sidecar that is still starting', async () => {
+  const runtime = createVoiceManager({ supported: true, play: () => '', cancel() {}, pause() {}, resume() {} });
+  let attempts = 0;
+  const config = createDefaultVoiceConfig();
+  await initializeVoice(
+    async () => {
+      attempts += 1;
+      if (attempts < 3) throw new Error('sidecar starting');
+      return config;
+    },
+    runtime,
+    { retries: 3, delayMs: 0 }
+  );
+  assert.equal(attempts, 3);
+  assert.equal(runtime.getState().ready, true);
+});
 test('dedicated voice save sends validated settings without unrelated project fields', async () => {
   let request: { url?: unknown; body?: string; method?: string } = {};
   const c = createDefaultVoiceConfig();

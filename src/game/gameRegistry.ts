@@ -1,6 +1,6 @@
 import { computed, type Component } from 'vue';
-import type { DyMessage } from '@/core/type';
 import type { ProjectConfig } from '@/services/configApi';
+import type { GameEventContext, GameEventResult, GameInteractionDefaults, RoutedLiveEvent } from './interactionTypes';
 import {
   handleQuizMessages,
   quizRuntimeSettings,
@@ -31,8 +31,13 @@ export interface GameModuleDefinition {
   applySavedConfig: (projectConfig: ProjectConfig) => void;
   start: (projectConfig?: ProjectConfig) => void;
   stop: () => void;
-  handleMessages: (messages: DyMessage[]) => void;
+  instanceId?: string;
+  interactionDefaults?: GameInteractionDefaults;
+  handleEvent: (event: RoutedLiveEvent, context: GameEventContext) => GameEventResult;
 }
+
+let quizInstanceSequence = 0;
+let versusInstanceSequence = 0;
 
 const quizGameModule: GameModuleDefinition = {
   id: 'quiz',
@@ -48,6 +53,7 @@ const quizGameModule: GameModuleDefinition = {
     }
   },
   start: (projectConfig?: ProjectConfig) => {
+    quizGameModule.instanceId = `quiz-${++quizInstanceSequence}`;
     if (projectConfig?.quizConfig) {
       startQuiz(projectConfig.quizConfig);
     } else {
@@ -57,10 +63,12 @@ const quizGameModule: GameModuleDefinition = {
   stop: () => {
     stopQuiz();
   },
-  handleMessages: (messages: DyMessage[]) => {
-    if (quizState.running) {
-      handleQuizMessages(messages);
-    }
+  instanceId: 'quiz-0',
+  interactionDefaults: { version: 1, chat: 'ignore' },
+  handleEvent: (event, context) => {
+    if (!quizState.running) return { claimed: false, speechIntents: [], aiIntents: [] };
+    const claimed = handleQuizMessages([event.message]);
+    return { claimed, speechIntents: [], aiIntents: [] };
   }
 };
 
@@ -74,15 +82,18 @@ const versusGameModule: GameModuleDefinition = {
   getStatusText: () => versusState.status,
   applySavedConfig: () => {},
   start: () => {
+    versusGameModule.instanceId = `versus-${++versusInstanceSequence}`;
     startVersus();
   },
   stop: () => {
     stopVersus();
   },
-  handleMessages: (messages: DyMessage[]) => {
-    if (versusState.running) {
-      handleVersusMessages(messages);
-    }
+  instanceId: 'versus-0',
+  interactionDefaults: { version: 1, chat: 'ignore' },
+  handleEvent: (event, context) => {
+    if (!versusState.running) return { claimed: false, speechIntents: [], aiIntents: [] };
+    const claimed = handleVersusMessages([event.message]);
+    return { claimed, speechIntents: [], aiIntents: [] };
   }
 };
 
@@ -98,15 +109,6 @@ export function getGameModule(id: unknown): GameModuleDefinition | undefined {
 export const activeGameModule = computed<GameModuleDefinition | null>(() => {
   return registeredGames.find(game => game.isRunning()) || null;
 });
-
-/**
- * 将直播间收到的弹幕、点赞、礼物消息仅转发给当前正在运行的游戏模块
- */
-export function dispatchMessagesToActiveGame(messages: DyMessage[]) {
-  const active = activeGameModule.value;
-  if (!active) return;
-  active.handleMessages(messages);
-}
 
 /**
  * 停止当前所有正在运行的游戏模块

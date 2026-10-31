@@ -37,3 +37,36 @@ test('presets only replace delivery parameters and never mutate the draft', () =
   assert.ok(result.rate > 1);
   assert.equal(config.rate, 1);
 });
+
+test('new chat and AI interaction controls have conservative defaults and validate ranges', () => {
+  const config = createDefaultVoiceConfig();
+  assert.equal(config.chat.enabled, true);
+  assert.equal(config.chat.triggerMode, 'all');
+  assert.equal(config.aiInteraction.enabled, false);
+  assert.equal(config.aiInteraction.triggerMode, 'smart');
+  assert.match(config.aiInteraction.interactionRule, /当前直播/);
+  assert.equal(config.aiInteraction.maxPerMinute, 4);
+  assert.equal(config.aiInteraction.persona, 'friendly-host');
+  assert.deepEqual(config.chat.output, { voice: true, text: false });
+  assert.deepEqual(config.scenes.gift.output, { voice: true, text: false });
+  assert.throws(() => validateVoiceConfig({
+    ...config,
+    chat: { ...config.chat, maxLength: 2000 }
+  }));
+  assert.throws(() => validateVoiceConfig({
+    ...config,
+    aiInteraction: { ...config.aiInteraction, globalCooldownMs: -1 }
+  }));
+  assert.throws(() => validateVoiceConfig({
+    ...config,
+    aiInteraction: { ...config.aiInteraction, maxPerMinute: 0 }
+  }));
+});
+
+test('output channels can be configured independently for chat, AI, and live events', () => {
+  const config = createDefaultVoiceConfig();
+  config.chat.output.text = true;
+  config.aiInteraction.output.text = true;
+  config.scenes.gift.output = { voice: false, text: true };
+  assert.deepEqual(validateVoiceConfig(config).scenes.gift.output, { voice: false, text: true });
+});

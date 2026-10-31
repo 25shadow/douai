@@ -22,10 +22,11 @@ export function createVoiceManager(adapter: SpeechAdapter, clock: Clock = realCl
   let paused = false;
   const recent = new Map<string, number>();
   const cooldown = new Map<string, number>();
+  let lastChatAnnouncementAt = -Infinity;
   const gamePolicies: Record<GameVoiceScene, VoiceConfig['scenes'][keyof VoiceConfig['scenes']]> = {
-    quiz: { enabled: true, template: '', prefix: '', priority: 3, maxLength: 1000, cooldownMs: 0 },
-    answer: { enabled: true, template: '', prefix: '', priority: 0, maxLength: 200, cooldownMs: 3000 },
-    system: { enabled: true, template: '', prefix: '', priority: 3, maxLength: 300, cooldownMs: 0 }
+    quiz: { enabled: true, template: '', prefix: '', priority: 3, maxLength: 1000, cooldownMs: 0, output: { voice: true, text: false } },
+    answer: { enabled: true, template: '', prefix: '', priority: 0, maxLength: 200, cooldownMs: 3000, output: { voice: true, text: false } },
+    system: { enabled: true, template: '', prefix: '', priority: 3, maxLength: 300, cooldownMs: 0, output: { voice: true, text: false } }
   };
   const listeners = new Set<(state: VoiceState) => void>();
   const state: VoiceState = { status: adapter.supported ? 'idle' : 'unsupported', currentText: '', queueSize: 0, error: '', warning: '', preview: false, ready: false };
@@ -88,6 +89,10 @@ export function createVoiceManager(adapter: SpeechAdapter, clock: Clock = realCl
     const body = text.trim().replace(/\s+/g, ' ');
     if (!policy.enabled || !body) return false;
     const now = clock.now();
+    if (scene === 'system' && owner === 'live-events') {
+      if (now - lastChatAnnouncementAt < config.chat.cooldownMs) return false;
+      lastChatAnnouncementAt = now;
+    }
     const key = `${owner}:${scene}:${body}`;
     const sceneKey = `${owner}:${scene}`;
     for (const [entry, time] of recent) if (now - time >= config.dedupeWindowMs) recent.delete(entry);

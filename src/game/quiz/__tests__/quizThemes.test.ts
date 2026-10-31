@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeQuizTheme, publishQuizTheme, quizThemes, readQuizTheme } from '../quizThemes.ts';
 
-test('quiz themes expose distinct OBS compositions and normalize saved selections', () => {
+test('quiz themes expose distinct compositions and normalize saved selections', () => {
   assert.deepEqual(quizThemes.map(theme => theme.id), ['arena', 'classroom', 'neon', 'arcade', 'scroll']);
   assert.equal(new Set(quizThemes.map(theme => theme.layout)).size, 5);
   assert.equal(normalizeQuizTheme('neon'), 'neon');
@@ -11,7 +11,7 @@ test('quiz themes expose distinct OBS compositions and normalize saved selection
   assert.equal(normalizeQuizTheme('unknown'), 'arena');
 });
 
-test('theme selection can be shared with a separate OBS browser source', () => {
+test('theme selection can be shared with the separate game display window', () => {
   const values = new Map<string, string>();
   const storage = {
     setItem: (key: string, value: string) => values.set(key, value),

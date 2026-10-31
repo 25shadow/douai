@@ -87,8 +87,8 @@ body.modal-open {
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(4px);
+  background: rgba(17, 24, 23, 0.28);
+  backdrop-filter: blur(6px);
 }
 
 .desktop-modal-window {
@@ -96,10 +96,10 @@ body.modal-open {
   flex-direction: column;
   width: min(100%, 580px);
   max-height: min(85vh, 720px);
-  border-radius: 14px;
+  border-radius: 12px;
   background: #ffffff;
   border: 1px solid rgba(226, 232, 240, 0.9);
-  box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.25), 0 0 1px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 18px 48px rgba(17, 24, 23, 0.14), 0 1px 2px rgba(17, 24, 23, 0.06);
   overflow: hidden;
   color: var(--text-main, #1e293b);
   animation: modalPop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
@@ -144,7 +144,7 @@ body.modal-open {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.1em;
-  color: #10b981;
+  color: #0b8f69;
 }
 
 .modal-header h2 {
@@ -192,7 +192,7 @@ body.modal-open {
   gap: 12px;
   padding: 14px 22px;
   border-top: 1px solid #f1f5f9;
-  background: #f8fafc;
+  background: #f6f8f6;
 }
 
 .modal-footer-bar small {

@@ -1,10 +1,15 @@
 import type { DyMessage } from '@/core/type';
-import { versusRuntimeSettings } from '@/game/versus/versusStore';
+import type { SimulationEvent, SimulationMode, SimulationScenario } from '@/services/simulationRunner';
+
+export type { SimulationEvent, SimulationMode, SimulationScenario };
 
 export interface LiveSimulationConfig {
   durationMinutes: number;
   audience: number;
   eventIntervalSeconds: number;
+  mode?: SimulationMode;
+  scenario?: SimulationScenario;
+  events?: SimulationEvent[];
 }
 
 export type SimulationGameId = 'quiz' | 'versus';
@@ -42,8 +47,53 @@ export function parseLiveSimulationPacket(raw: string | null): LiveSimulationSyn
 export const defaultLiveSimulationConfig: LiveSimulationConfig = {
   durationMinutes: 5,
   audience: 120,
-  eventIntervalSeconds: 3
+  eventIntervalSeconds: 3,
+  mode: 'demo'
 };
+
+export function createSimulationScenario(
+  gameId: SimulationGameId,
+  config: LiveSimulationConfig,
+  mode: SimulationMode = config.mode || 'demo'
+): SimulationScenario {
+  const durationSeconds = Math.max(30, config.durationMinutes * 60);
+  if (config.scenario?.events?.length) {
+    return {
+      ...config.scenario,
+      gameId,
+      mode,
+      durationSeconds: config.scenario.durationSeconds || durationSeconds,
+      events: config.scenario.events.map(event => ({ ...event }))
+    };
+  }
+  if (config.events?.length) {
+    return {
+      id: `${mode}-${gameId}-custom`,
+      name: mode === 'qa' ? '验收脚本' : mode === 'rehearsal' ? '彩排脚本' : '演示脚本',
+      gameId,
+      mode,
+      durationSeconds,
+      events: config.events.map(event => ({ ...event }))
+    };
+  }
+  const interval = Math.max(1, config.eventIntervalSeconds);
+  const events: SimulationEvent[] = [
+    { id: 'join-1', atSeconds: 0, type: 'join', payload: { name: '小星' }, enabled: true, label: '观众进入直播间' },
+    { id: 'chat-1', atSeconds: interval, type: 'chat', payload: { name: '小星', content: gameId === 'versus' ? '1A' : 'A' }, enabled: true, label: '观众参与答题' },
+    { id: 'like-1', atSeconds: interval * 2, type: 'like', payload: { name: '橘子汽水', count: 120 }, enabled: true, label: '点赞助力' },
+    { id: 'gift-1', atSeconds: interval * 3, type: 'gift', payload: { name: '阿北', giftName: '小心心', price: 1, count: 1 }, enabled: true, label: '送出小礼物' },
+    { id: 'chat-2', atSeconds: interval * 4, type: 'chat', payload: { name: '木木', content: gameId === 'versus' ? '2B' : 'B' }, enabled: true, label: '第二位观众答题' },
+    { id: 'gift-2', atSeconds: interval * 5, type: 'gift', payload: { name: '小满', giftName: '小花花', price: 11, count: 1 }, enabled: true, label: '高价值礼物' }
+  ];
+  return {
+    id: `${mode}-${gameId}-default`,
+    name: mode === 'qa' ? '验收脚本' : mode === 'rehearsal' ? '彩排脚本' : '完整演示',
+    gameId,
+    mode,
+    durationSeconds,
+    events
+  };
+}
 
 export function canStartLiveSimulation(connection: string, active: boolean): boolean {
   return !active && connection === 'offline';
@@ -57,10 +107,49 @@ const demoGifts = [
 ];
 
 export function normalizeSimulationConfig(config: Partial<LiveSimulationConfig>): LiveSimulationConfig {
-  return {
+  const normalized: LiveSimulationConfig = {
     durationMinutes: clampInteger(config.durationMinutes, 1, 180, defaultLiveSimulationConfig.durationMinutes),
     audience: clampInteger(config.audience, 1, 99999, defaultLiveSimulationConfig.audience),
     eventIntervalSeconds: clampInteger(config.eventIntervalSeconds, 1, 60, defaultLiveSimulationConfig.eventIntervalSeconds)
+  };
+  if (config.mode || config.scenario || config.events) {
+    normalized.mode = config.mode === 'qa' || config.mode === 'rehearsal' || config.mode === 'demo' ? config.mode : defaultLiveSimulationConfig.mode;
+    if (config.scenario) normalized.scenario = config.scenario;
+    if (config.events) normalized.events = config.events;
+  }
+  return normalized;
+}
+
+export function createManualInteractionEvent(
+  type: SimulationEvent['type'],
+  input: {
+    actorId?: string;
+    actorName?: string;
+    text?: string;
+    count?: number;
+    giftName?: string;
+    price?: number;
+  }
+): SimulationEvent {
+  const payload: Record<string, unknown> = {
+    userId: input.actorId || `manual-user-${Date.now()}`,
+    name: input.actorName?.trim() || '现场观众'
+  };
+  if (type === 'chat') payload.content = input.text?.trim() || 'A';
+  if (type === 'like') payload.count = Math.max(1, Math.round(Number(input.count) || 1));
+  if (type === 'gift') {
+    payload.giftName = input.giftName?.trim() || '小心心';
+    payload.price = Math.max(1, Math.round(Number(input.price) || 1));
+    payload.count = Math.max(1, Math.round(Number(input.count) || 1));
+  }
+  return {
+    id: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    type,
+    payload,
+    enabled: true,
+    source: 'manual',
+    status: 'draft',
+    label: type === 'chat' ? '手动评论' : type === 'like' ? '手动点赞' : '手动送礼'
   };
 }
 
@@ -70,7 +159,11 @@ function clampInteger(value: unknown, min: number, max: number, fallback: number
   return Math.max(min, Math.min(max, Math.round(parsed)));
 }
 
-export function createSimulationMessage(index: number, gameId: SimulationGameId = 'quiz'): DyMessage {
+export function createSimulationMessage(
+  index: number,
+  gameId: SimulationGameId = 'quiz',
+  commands: { red?: string; blue?: string } = {}
+): DyMessage {
   const userIndex = Math.abs(Math.floor(index)) % demoNames.length;
   const eventIndex = Math.abs(Math.floor(index)) % 5;
   const user = { id: `demo-user-${userIndex + 1}`, name: demoNames[userIndex] };
@@ -92,7 +185,7 @@ export function createSimulationMessage(index: number, gameId: SimulationGameId 
   }
 
   const comment = gameId === 'versus'
-    ? (userIndex % 2 === 0 ? (versusRuntimeSettings.redCommand || '1') : (versusRuntimeSettings.blueCommand || '2'))
+    ? (userIndex % 2 === 0 ? (commands.red || '1') : (commands.blue || '2'))
     : demoComments[userIndex % demoComments.length];
 
   return {

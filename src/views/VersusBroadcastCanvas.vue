@@ -59,7 +59,7 @@ function isCorrectRevealed(opt: VersusOption): boolean {
 
 <template>
   <main class="versus-canvas" :class="[`theme-${currentTheme}`, { 'output-only': props.outputOnly }]">
-    <!-- 顶部主题快速切换栏 (OBS采集时不显示) -->
+    <!-- 顶部主题快速切换栏 (独立画面模式下不显示) -->
     <nav v-if="!props.outputOnly" class="versus-theme-switcher">
       <button
         v-for="t in versusThemes"
@@ -857,9 +857,9 @@ function isCorrectRevealed(opt: VersusOption): boolean {
   box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
 }
 .phase-badge.revealing {
-  background: #10b981;
+  background: #0b8f69;
   color: #ffffff;
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.5);
+  box-shadow: 0 0 12px rgba(11, 143, 105, 0.5);
 }
 
 .timer-circle {
@@ -949,21 +949,21 @@ function isCorrectRevealed(opt: VersusOption): boolean {
 }
 
 .battle-option-item.revealed {
-  background: rgba(16, 185, 129, 0.2);
-  border-color: #10b981;
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+  background: rgba(11, 143, 105, 0.2);
+  border-color: #0b8f69;
+  box-shadow: 0 0 20px rgba(11, 143, 105, 0.4);
 }
 .battle-option-item.revealed .opt-prefix {
-  background: #10b981;
+  background: #0b8f69;
 }
 .correct-badge {
   font-size: 14px;
   font-weight: 800;
-  color: #10b981;
-  background: rgba(16, 185, 129, 0.2);
+  color: #0b8f69;
+  background: rgba(11, 143, 105, 0.2);
   padding: 4px 10px;
   border-radius: 6px;
-  border: 1px solid #10b981;
+  border: 1px solid #0b8f69;
 }
 
 /* 实时打击流 */

@@ -1,6 +1,6 @@
 <template>
   <div v-if="props.open" class="theme-preview-backdrop" @click.self="$emit('close')">
-    <div class="theme-preview-shell" role="dialog" aria-label="主题预览">
+    <div class="game-preview-shell" role="dialog" aria-label="游戏画面预览">
       <!-- 顶部轻量主题切换条 + 关闭按钮 -->
       <div class="preview-top-bar">
         <!-- 知识问答主题标签页 -->
@@ -155,8 +155,8 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(8px);
+  background: rgba(17, 24, 23, 0.28);
+  backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -169,18 +169,18 @@ onBeforeUnmount(() => {
   to { opacity: 1; }
 }
 
-.theme-preview-shell {
+.game-preview-shell {
   display: flex;
   flex-direction: column;
   height: 94vh;
   aspect-ratio: 9 / 16;
   max-width: 95vw;
-  background: #000;
-  border-radius: 20px;
+  background: #ffffff;
+  border-radius: 12px;
   overflow: hidden;
   box-shadow:
-    0 24px 64px -12px rgba(0, 0, 0, 0.75),
-    0 0 0 1px rgba(255, 255, 255, 0.1);
+    0 18px 48px rgba(17, 24, 23, 0.18),
+    0 0 0 1px #e3e5e1;
 }
 
 .preview-top-bar {
@@ -189,9 +189,8 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 14px;
-  background: rgba(18, 18, 22, 0.95);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: #ffffff;
+  border-bottom: 1px solid #e3e5e1;
   flex-shrink: 0;
   z-index: 10;
 }
@@ -213,8 +212,8 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   font-size: 13px;
   font-weight: 600;
-  color: #94a3b8;
-  background: rgba(255, 255, 255, 0.05);
+  color: #66716c;
+  background: #f3f4f2;
   border: 1px solid transparent;
   cursor: pointer;
   white-space: nowrap;
@@ -222,14 +221,14 @@ onBeforeUnmount(() => {
 }
 
 .theme-tab-pill:hover {
-  color: #f1f5f9;
-  background: rgba(255, 255, 255, 0.1);
+  color: #111817;
+  background: #e8ece8;
 }
 
 .theme-tab-pill.active {
   color: #ffffff;
-  background: #10b981;
-  box-shadow: 0 0 14px rgba(16, 185, 129, 0.45);
+  background: #0b8f69;
+  box-shadow: none;
 }
 
 .theme-tab-pill.versus.active {
@@ -244,9 +243,9 @@ onBeforeUnmount(() => {
   width: 30px;
   height: 30px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
+  background: #f3f4f2;
   border: none;
-  color: #cbd5e1;
+  color: #66716c;
   cursor: pointer;
   flex-shrink: 0;
   transition: all 0.18s ease;
@@ -262,7 +261,7 @@ onBeforeUnmount(() => {
   width: 100%;
   position: relative;
   overflow: hidden;
-  background: #000;
+  background: #111817;
   display: flex;
   align-items: flex-start;
   justify-content: center;

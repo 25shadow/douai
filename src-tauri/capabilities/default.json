@@ -2,9 +2,15 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-capability",
   "description": "Main window permissions",
-  "windows": ["main"],
+  "windows": ["main", "game-display-window"],
   "permissions": [
     "core:default",
+    "core:webview:allow-create-webview-window",
+    "core:window:allow-close",
+    "core:window:allow-minimize",
+    "core:window:allow-set-focus",
+    "core:window:allow-show",
+    "core:window:allow-toggle-maximize",
     "shell:allow-spawn",
     "shell:allow-kill"
   ]

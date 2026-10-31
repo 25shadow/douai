@@ -1,15 +1,17 @@
-import { reactive } from 'vue';
+import { computed, reactive } from 'vue';
 import { DyCast } from '@/core/dycast';
 import { RelayCast } from '@/core/relay';
 import { type DyLiveInfo, type DyMessage, type LiveRoom } from '@/core/type';
-import { dispatchMessagesToActiveGame, getGameModule, stopAllRunningGames } from '@/game/gameRegistry';
+import { getGameModule, stopAllRunningGames, activeGameModule } from '@/game/gameRegistry';
+import { createInteractionRouter } from '@/game/interactionRouter';
 import { quizRuntimeSettings, quizState } from '@/game/quiz/quizStore';
-import { loadConfig } from '@/services/configApi';
+import { loadConfig, type GameInteractionConfig } from '@/services/configApi';
 import { createLiveFeedItems, type LiveFeedItem } from '@/services/liveFeed';
-import { announceLiveMessage } from '@/voice/liveAnnouncements';
+import { announceAiHostMessage, announceLiveMessage, configureAiInteraction } from '@/voice/liveAnnouncements';
+import { speak } from '@/voice/voiceManager';
 import {
   canStartLiveSimulation,
-  createSimulationMessage,
+  createSimulationScenario,
   defaultLiveSimulationConfig,
   liveSimulationSyncKey,
   normalizeSimulationConfig,
@@ -17,8 +19,12 @@ import {
   serializeLiveSimulationPacket,
   isSupportedSimulationGame,
   type LiveSimulationConfig,
-  type SimulationGameId
+  type SimulationGameId,
+  type SimulationMode,
+  type SimulationEvent
 } from '@/services/liveSimulation';
+import { createSimulationRunner, type SimulationRunner } from '@/services/simulationRunner';
+import { createManualInteractionQueue, type ManualInteractionQueue } from '@/services/manualInteractionQueue';
 
 export const liveState = reactive({
   roomId: '',
@@ -39,16 +45,30 @@ export const liveState = reactive({
 export const simulationState = reactive({
   active: false,
   gameId: null as SimulationGameId | null,
+  mode: 'demo' as SimulationMode,
+  status: 'idle' as 'idle' | 'ready' | 'running' | 'paused' | 'finished' | 'error',
   elapsedSeconds: 0,
   durationSeconds: 0,
-  config: { ...defaultLiveSimulationConfig }
+  config: { ...defaultLiveSimulationConfig },
+  cursor: 0,
+  timeline: [] as SimulationEvent[],
+  history: [] as SimulationEvent[],
+  queue: [] as SimulationEvent[]
 });
+
+export const simulationStatus = computed(() => simulationState.status);
+export const simulationMode = computed(() => simulationState.mode);
+export const simulationTimeline = computed(() => simulationState.timeline);
 
 let cast: DyCast | undefined;
 let relay: RelayCast | undefined;
 let simulationTimer: number | undefined;
+let simulationRunner: SimulationRunner | undefined;
+const manualQueue: ManualInteractionQueue = createManualInteractionQueue();
 let simulationSequence = 0;
 let simulationStartedQuiz = false;
+let liveSessionSequence = 0;
+let liveSessionId = 'offline';
 let liveSnapshot: Pick<typeof liveState, 'liveInfo' | 'audience' | 'likes' | 'followers' | 'totalUsers' | 'activityFeed' | 'events'> | undefined;
 const simulationSourceId = globalThis.crypto?.randomUUID?.() || `simulation-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 let remoteSnapshot: {
@@ -56,6 +76,18 @@ let remoteSnapshot: {
   quiz: typeof quizState;
   settings: typeof quizRuntimeSettings;
 } | undefined;
+
+const interactionRouter = createInteractionRouter({
+  getActiveGame: () => activeGameModule.value,
+  getGlobalChatPolicy: () => 'ignore',
+  submitSpeechIntent: intent => speak(intent.text, {
+    scene: (intent.scene as 'system' | 'gift' | 'like' | 'join' | 'follow' | 'share' | 'quiz' | 'answer') || 'system',
+    owner: intent.owner
+  }),
+  runAiHost: event => announceAiHostMessage(event.message),
+  getGameInteractionConfig: () => gameInteractionConfig,
+  now: () => Date.now()
+});
 
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -196,6 +228,7 @@ export function applyRoomMetrics(room?: LiveRoom | DyLiveInfo | null) {
 }
 
 let pauseOnDisconnectPolicy = true;
+let gameInteractionConfig: GameInteractionConfig | undefined;
 
 export function connectRoom(roomId = liveState.roomId) {
   if (simulationState.active) {
@@ -210,6 +243,8 @@ export function connectRoom(roomId = liveState.roomId) {
   disconnectRoom();
   liveState.roomId = roomId;
   liveState.connection = 'connecting';
+  liveSessionId = `live-${++liveSessionSequence}`;
+  interactionRouter.clear();
   liveState.connectionLabel = '正在连接';
   liveState.error = '';
   liveState.audience = 0;
@@ -224,6 +259,8 @@ export function connectRoom(roomId = liveState.roomId) {
     applyRoomMetrics(info);
     void loadConfig()
       .then(saved => {
+        configureAiInteraction(saved.aiConfig);
+        gameInteractionConfig = saved.gameInteractionConfig;
         pauseOnDisconnectPolicy = Boolean(saved.pauseOnDisconnect);
         const quizModule = getGameModule('quiz');
         quizModule?.applySavedConfig(saved);
@@ -236,8 +273,21 @@ export function connectRoom(roomId = liveState.roomId) {
       });
   });
   cast.on('message', messages => {
-    dispatchMessagesToActiveGame(messages);
-    messages.forEach(announceLiveMessage);
+    void (async () => {
+      for (const message of messages) {
+        const result = await interactionRouter.routeEvent({
+          eventId: message.id,
+          source: 'live',
+          receivedAt: Date.now(),
+          sessionId: liveSessionId,
+          message
+        });
+        if (result?.globalEventRouted === true
+          || (!result?.claimed && !result?.chatRouted && !activeGameModule.value)) {
+          announceLiveMessage(message);
+        }
+      }
+    })();
     push(liveState.events, messages);
     push(liveState.activityFeed, createLiveFeedItems(messages));
     messages.forEach(message => {
@@ -263,6 +313,8 @@ export function connectRoom(roomId = liveState.roomId) {
 export function disconnectRoom() {
   const wasConnected = Boolean(cast);
   cast?.close(1000, '控制台断开');
+  liveSessionId = `offline-${++liveSessionSequence}`;
+  interactionRouter.clear();
   cast = undefined;
   liveState.connection = 'offline';
   liveState.connectionLabel = '未连接';
@@ -296,10 +348,95 @@ export function stopRelay() {
   liveState.relayStatus = 'offline';
 }
 
+function simulationEventToMessage(event: SimulationEvent): DyMessage {
+  const payload = event.payload || {};
+  const user = {
+    id: String(payload.userId || `demo-user-${simulationSequence + 1}`),
+    name: String(payload.name || '观众'),
+    avatar: typeof payload.avatar === 'string' ? payload.avatar : undefined
+  };
+  if (event.type === 'like') {
+    return { id: event.id, method: 'WebcastLikeMessage' as DyMessage['method'], user, content: `为主播点赞了(${Number(payload.count || 1)})` };
+  }
+  if (event.type === 'gift') {
+    return {
+      id: event.id,
+      method: 'WebcastGiftMessage' as DyMessage['method'],
+      user,
+      gift: {
+        name: String(payload.giftName || '小心心'),
+        price: Number(payload.price || 1),
+        count: Number(payload.count || 1),
+        repeatEnd: 0,
+        icon: typeof payload.icon === 'string' ? payload.icon : undefined
+      }
+    };
+  }
+  if (event.type === 'join') {
+    return { id: event.id, method: 'WebcastMemberMessage' as DyMessage['method'], user, content: '进入了直播间' };
+  }
+  if (event.type === 'follow') {
+    return { id: event.id, method: 'WebcastSocialMessage' as DyMessage['method'], user, content: '关注了主播' };
+  }
+  return {
+    id: event.id,
+    method: 'WebcastChatMessage' as DyMessage['method'],
+    user,
+    content: String(payload.content || event.label || '模拟互动')
+  };
+}
+
+function syncSimulationSnapshot() {
+  const snapshot = simulationRunner?.snapshot();
+  if (!snapshot) return;
+  simulationState.status = snapshot.status;
+  simulationState.elapsedSeconds = snapshot.elapsedSeconds;
+  simulationState.durationSeconds = snapshot.scenario.durationSeconds;
+  simulationState.cursor = snapshot.cursor;
+  simulationState.timeline = snapshot.scenario.events;
+}
+
+function dispatchSimulationEvent(event: SimulationEvent) {
+  event.status = 'dispatched';
+  simulationState.history.unshift(event);
+  simulationState.history.splice(50);
+  const message = simulationEventToMessage(event);
+  if (message.method === 'WebcastLikeMessage') {
+    const count = Number(message.content?.match(/\((\d+)\)/)?.[1] || 0);
+    liveState.likes += count;
+    message.room = { audienceCount: liveState.audience, likeCount: liveState.likes, followCount: liveState.followers, totalUserCount: liveState.totalUsers };
+  }
+  if (message.method === 'WebcastGiftMessage' && Number(message.gift?.price || 0) >= 10) liveState.followers += 1;
+  if (message.method === 'WebcastMemberMessage') liveState.totalUsers += 1;
+  void interactionRouter.routeEvent({
+    eventId: message.id,
+    source: 'simulation',
+    receivedAt: Date.now(),
+    sessionId: liveSessionId,
+    message
+  }).then(result => {
+    event.status = result?.claimed || result?.chatRouted ? 'claimed' : 'ignored';
+    event.result = {
+      claimed: Boolean(result?.claimed),
+      game: activeGameModule.value?.id,
+      speechTriggered: Boolean(result?.speechIntents?.length || result?.chatRouted)
+    };
+    if (result?.globalEventRouted === true
+      || (!result?.claimed && !result?.chatRouted && !activeGameModule.value)) {
+      announceLiveMessage(message);
+    }
+  });
+  push(liveState.events, [message]);
+  push(liveState.activityFeed, createLiveFeedItems([message]));
+  simulationSequence += 1;
+}
+
 export function startLiveSimulation(gameId: unknown, input: Partial<LiveSimulationConfig>) {
   if (!isSupportedSimulationGame(gameId) || !canStartLiveSimulation(liveState.connection, simulationState.active)) return false;
 
   const config = normalizeSimulationConfig(input);
+  const mode = config.mode || 'demo';
+  const scenario = createSimulationScenario(gameId, config, mode);
   liveSnapshot = {
     liveInfo: liveState.liveInfo,
     audience: liveState.audience,
@@ -311,10 +448,17 @@ export function startLiveSimulation(gameId: unknown, input: Partial<LiveSimulati
   };
   simulationState.active = true;
   simulationState.gameId = gameId;
+  simulationState.mode = mode;
+  simulationState.status = 'ready';
   simulationState.elapsedSeconds = 0;
-  simulationState.durationSeconds = config.durationMinutes * 60;
+  simulationState.durationSeconds = scenario.durationSeconds;
   simulationState.config = config;
+  simulationState.history = [];
+  manualQueue.clear();
+  simulationState.queue = [];
   simulationSequence = 0;
+  liveSessionId = `simulation-${++liveSessionSequence}`;
+  interactionRouter.clear();
   simulationStartedQuiz = false;
   liveState.liveInfo = {
     roomNum: 'DOUAI-DEMO',
@@ -323,7 +467,7 @@ export function startLiveSimulation(gameId: unknown, input: Partial<LiveSimulati
     avatar: '',
     cover: '',
     nickname: '模拟主播',
-    title: '知识问答模拟直播',
+    title: mode === 'qa' ? '知识问答验收演练' : mode === 'rehearsal' ? '知识问答彩排演练' : '知识问答模拟直播',
     status: 2
   };
   liveState.audience = config.audience;
@@ -337,41 +481,103 @@ export function startLiveSimulation(gameId: unknown, input: Partial<LiveSimulati
     targetGame.start();
     simulationStartedQuiz = targetGame.isRunning();
   }
+  simulationRunner = createSimulationRunner(scenario, event => dispatchSimulationEvent(event));
+  simulationRunner.start();
+  if (mode === 'qa') simulationRunner.pause();
+  syncSimulationSnapshot();
   publishSimulationState();
 
   simulationTimer = window.setInterval(() => {
-    simulationState.elapsedSeconds += 1;
+    if (!simulationRunner || simulationState.status !== 'running') return;
+    simulationRunner.tick(1);
     liveState.audience = Math.max(1, config.audience + Math.round(Math.sin(simulationState.elapsedSeconds / 8) * config.audience * 0.08));
     liveState.totalUsers = Math.max(liveState.totalUsers, liveState.audience * 12 + simulationState.elapsedSeconds);
-
-    if (simulationState.elapsedSeconds % config.eventIntervalSeconds === 0) {
-      const message = createSimulationMessage(simulationSequence++, simulationState.gameId as any);
-      if (message.method === 'WebcastLikeMessage') {
-        const count = Number(message.content?.match(/\((\d+)\)/)?.[1] || 0);
-        liveState.likes += count;
-        message.room = { audienceCount: liveState.audience, likeCount: liveState.likes, followCount: liveState.followers, totalUserCount: liveState.totalUsers };
-      }
-      if (message.method === 'WebcastGiftMessage' && simulationSequence % 6 === 0) liveState.followers += 1;
-      dispatchMessagesToActiveGame([message]);
-      announceLiveMessage(message);
-      push(liveState.events, [message]);
-      push(liveState.activityFeed, createLiveFeedItems([message]));
-    }
-
-    if (simulationState.elapsedSeconds >= simulationState.durationSeconds) {
-      stopLiveSimulation();
-      return;
-    }
-    publishSimulationState();
+    syncSimulationSnapshot();
+    if (simulationRunner?.snapshot().status === 'finished') stopLiveSimulation();
+    else publishSimulationState();
   }, 1000);
   return true;
+}
+
+export function pauseLiveSimulation() {
+  simulationRunner?.pause();
+  syncSimulationSnapshot();
+  publishSimulationState();
+}
+
+export function resumeLiveSimulation() {
+  simulationRunner?.resume();
+  syncSimulationSnapshot();
+  publishSimulationState();
+}
+
+export function stepLiveSimulation() {
+  const event = simulationRunner?.step();
+  syncSimulationSnapshot();
+  publishSimulationState();
+  return event;
+}
+
+export function injectSimulationEvent(event: Omit<SimulationEvent, 'id' | 'executed'> & { id?: string }) {
+  if (!simulationRunner || !simulationState.active) return undefined;
+  const manualEvent = {
+    ...event,
+    id: event.id || `manual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    source: 'manual' as const,
+    status: 'queued' as const,
+    executed: false
+  };
+  dispatchSimulationEvent(manualEvent);
+  publishSimulationState();
+  return manualEvent;
+}
+
+function syncManualQueue() {
+  simulationState.queue = manualQueue.snapshot();
+  publishSimulationState();
+}
+
+export function queueSimulationEvent(event: Omit<SimulationEvent, 'id' | 'executed'> & { id?: string }) {
+  if (!simulationRunner || !simulationState.active) return undefined;
+  const queued = manualQueue.enqueue({
+    ...event,
+    id: event.id || `manual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    source: 'manual',
+    status: 'queued',
+    executed: false
+  });
+  syncManualQueue();
+  return queued;
+}
+
+export function dispatchNextSimulationEvent() {
+  const event = manualQueue.dequeue();
+  if (!event) return undefined;
+  dispatchSimulationEvent({ ...event, status: 'dispatched' });
+  syncManualQueue();
+  return event;
+}
+
+export function clearSimulationQueue() {
+  manualQueue.clear();
+  syncManualQueue();
 }
 
 export function stopLiveSimulation() {
   if (simulationTimer !== undefined) window.clearInterval(simulationTimer);
   simulationTimer = undefined;
+  simulationRunner?.stop();
+  simulationRunner = undefined;
+  liveSessionId = `offline-${++liveSessionSequence}`;
+  interactionRouter.clear();
   simulationState.active = false;
+  simulationState.status = 'idle';
   simulationState.gameId = null;
+  simulationState.timeline = [];
+  simulationState.cursor = 0;
+  simulationState.history = [];
+  manualQueue.clear();
+  simulationState.queue = [];
   if (simulationStartedQuiz) stopAllRunningGames();
   simulationStartedQuiz = false;
   if (liveSnapshot) {

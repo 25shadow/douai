@@ -33,7 +33,7 @@ test('quiz routes scenes, clears stale feedback, respects its toggle and preserv
     assert.match(spoken.at(-1).text, /^小星 答对了/);
     spoken.at(-1).onend();
     handleQuizMessages([{ id: 'gift', method: 'WebcastGiftMessage', user: { id: 'b', name: '小月' }, gift: { name: '心', price: 1, count: 1, repeatEnd: 0 } }] as any);
-    assert.match(spoken.at(-1).text, /^小月 答对了/);
+    assert.match(spoken.at(-1).text, /^感谢小月送出心/);
     spoken.at(-1).onend();
     handleQuizMessages([{ id: 'like', method: 'WebcastLikeMessage', content: '为主播点赞了(1)' }] as any);
     assert.match(spoken.at(-1).text, /答题时间延长/);

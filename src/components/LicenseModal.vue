@@ -69,7 +69,7 @@
         <div class="benefits-grid">
           <div class="benefit-item">
             <CheckCircle :size="14" class="benefit-icon" />
-            <span>119+ 互动游戏畅玩</span>
+            <span>多种互动玩法</span>
           </div>
           <div class="benefit-item">
             <CheckCircle :size="14" class="benefit-icon" />
@@ -81,7 +81,7 @@
           </div>
           <div class="benefit-item">
             <CheckCircle :size="14" class="benefit-icon" />
-            <span>9:16 OBS 高清捕获窗口</span>
+            <span>9:16 独立游戏画面窗口</span>
           </div>
           <div class="benefit-item">
             <CheckCircle :size="14" class="benefit-icon" />
@@ -143,8 +143,8 @@ async function activateKey() {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(4px);
+  background: rgba(17, 24, 23, 0.28);
+  backdrop-filter: blur(6px);
   display: grid;
   place-items: center;
   padding: 20px;
@@ -154,8 +154,9 @@ async function activateKey() {
   width: 100%;
   max-width: 540px;
   background: #ffffff;
-  border-radius: 16px;
-  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.15), 0 1px 3px rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  border: 1px solid #e3e5e1;
+  box-shadow: 0 18px 48px rgba(17, 24, 23, 0.14), 0 1px 2px rgba(17, 24, 23, 0.06);
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -190,11 +191,11 @@ async function activateKey() {
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: #0b8f69;
   display: grid;
   place-items: center;
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+  box-shadow: none;
 }
 
 .header-left h2 {
@@ -227,8 +228,8 @@ async function activateKey() {
 .status-card {
   padding: 16px 18px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-  border: 1px solid #bbf7d0;
+  background: #e7f5ef;
+  border: 1px solid #b8e3d0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -307,14 +308,14 @@ async function activateKey() {
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: #10b981;
+  color: #0b8f69;
   font-weight: 600;
   padding: 4px 8px;
   border-radius: 4px;
-  background: #ecfdf5;
+  background: #e7f5ef;
 }
 .copy-box button:hover {
-  background: #d1fae5;
+  background: #c8ebdc;
 }
 
 .input-row {
@@ -333,13 +334,13 @@ async function activateKey() {
   outline: none;
 }
 .input-row input:focus {
-  border-color: #10b981;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+  border-color: #0b8f69;
+  box-shadow: 0 0 0 2px rgba(11, 143, 105, 0.2);
 }
 
 .activate-btn {
   padding: 0 18px;
-  background: #10b981;
+  background: #0b8f69;
   color: #ffffff;
   border-radius: 8px;
   font-size: 13px;
@@ -348,7 +349,7 @@ async function activateKey() {
   transition: all 0.15s;
 }
 .activate-btn:hover:not(:disabled) {
-  background: #059669;
+  background: #087a5a;
 }
 .activate-btn:disabled {
   opacity: 0.5;
@@ -392,7 +393,7 @@ async function activateKey() {
 }
 
 .benefit-icon {
-  color: #10b981;
+  color: #0b8f69;
   flex-shrink: 0;
 }
 </style>

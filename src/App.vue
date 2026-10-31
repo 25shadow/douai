@@ -1,17 +1,13 @@
 <template>
-  <!-- OBS 纯画面输出模式 (无标题栏与导航栏) -->
-  <div v-if="isObsOutput" class="obs-standalone-shell">
-    <ObsLiveView />
+  <!-- 独立游戏画面窗口 -->
+  <div v-if="isGameDisplayRoute" class="game-display-shell">
+    <GameDisplayView />
   </div>
 
   <!-- 桌面电脑软件完整布局 (Tauri 友好) -->
   <div v-else class="desktop-app-shell">
     <!-- 桌面专属原生级标题栏 (可拖拽窗口区域) -->
-    <DesktopTitleBar 
-      :obs-window-visible="showObsFloatingWindow"
-      @open-license="showLicenseModal = true"
-      @toggle-obs-window="toggleObsWindow"
-    />
+    <DesktopTitleBar @open-license="showLicenseModal = true" />
 
     <!-- 软件主工作区 (左侧导航 + 右侧主内容) -->
     <div class="desktop-body">
@@ -129,7 +125,7 @@
       </aside>
 
       <!-- 主视图渲染区 -->
-      <main class="desktop-content-viewport">
+      <main class="desktop-content-viewport" :class="{ 'console-page': activePage === 'console' }">
         <!-- 语音错误提醒条 -->
         <div v-if="voiceInitError" class="voice-init-banner" role="alert">
           <span>⚠️ 语音引擎初始化提示：{{ voiceInitError }}</span>
@@ -148,7 +144,7 @@
           v-else-if="activePage === 'home'" 
           @navigate="handleNavigate" 
           @open-license="showLicenseModal = true"
-          @toggle-obs-window="toggleObsWindow"
+          @open-game-preview="openGamePreview"
         />
 
         <RunConfigView 
@@ -159,19 +155,19 @@
           v-else-if="activePage === 'games'" 
           @open-quiz="go('quiz')" 
           @open-versus="go('versus')"
-          @launch-obs="toggleObsWindow"
+          @open-game-preview="openGamePreview"
         />
 
         <QuizConfigView 
           v-else-if="activePage === 'quiz'" 
           @back="go('games')" 
-          @launch-obs="toggleObsWindow('quiz')"
+          @open-game-preview="openGamePreview('quiz')"
         />
 
         <VersusConfigView 
           v-else-if="activePage === 'versus'" 
           @back="go('games')" 
-          @launch-obs="toggleObsWindow('versus')"
+          @open-game-preview="openGamePreview('versus')"
         />
 
         <BgmMusicView 
@@ -188,11 +184,11 @@
       </main>
     </div>
 
-    <!-- 独立 9:16 OBS 浮动画面窗口 -->
-    <FloatingObsWindow 
-      :open="showObsFloatingWindow" 
+    <!-- 游戏主题预览 -->
+    <FloatingGamePreview
+      :open="showGamePreview"
       :game-id="previewGameId"
-      @close="showObsFloatingWindow = false" 
+      @close="showGamePreview = false"
     />
 
     <!-- 卡密激活与会员授权弹窗 -->
@@ -212,7 +208,7 @@ import {
 
 import DesktopTitleBar from './components/DesktopTitleBar.vue';
 import LicenseModal from './components/LicenseModal.vue';
-import FloatingObsWindow from './components/FloatingObsWindow.vue';
+import FloatingGamePreview from './components/FloatingGamePreview.vue';
 
 import LiveConsoleView from './views/LiveConsoleView.vue';
 import HomeDashboardView from './views/HomeDashboardView.vue';
@@ -223,7 +219,7 @@ import VersusConfigView from './views/VersusConfigView.vue';
 import BgmMusicView from './views/BgmMusicView.vue';
 import VoiceConfigView from './views/VoiceConfigView.vue';
 import SystemSettingsView from './views/SystemSettingsView.vue';
-import ObsLiveView from './views/ObsLiveView.vue';
+import GameDisplayView from './views/GameDisplayView.vue';
 
 import { ensureVoiceInitialized } from './voice/voiceInitialization';
 import { voiceManager } from './voice/voiceManager';
@@ -232,7 +228,7 @@ type Page = 'console' | 'home' | 'connect' | 'games' | 'quiz' | 'versus' | 'bgm'
 const pages: Page[] = ['console', 'home', 'connect', 'games', 'quiz', 'versus', 'bgm', 'voice', 'settings'];
 
 const requestedPage = new URLSearchParams(location.search).get('page');
-const isObsOutput = new URLSearchParams(location.search).get('output') === '1';
+const isGameDisplayRoute = new URLSearchParams(location.search).get('display') === 'game';
 
 // 页面路由映射兼容 (控制台作为默认第一页)
 function resolveInitialPage(): Page {
@@ -242,7 +238,7 @@ function resolveInitialPage(): Page {
 }
 
 const activePage = ref<Page>(resolveInitialPage());
-const showObsFloatingWindow = ref(false);
+const showGamePreview = ref(false);
 const showLicenseModal = ref(false);
 
 const voiceInitError = ref('');
@@ -265,7 +261,7 @@ const unsubscribeVoice = voiceManager.subscribe(state => {
 });
 
 onMounted(() => {
-  if (!isObsOutput) {
+  if (!isGameDisplayRoute) {
     void loadVoice();
   }
 });
@@ -302,25 +298,25 @@ window.addEventListener('popstate', () => {
 
 const previewGameId = ref<'quiz' | 'versus'>('quiz');
 
-function toggleObsWindow(gameId?: 'quiz' | 'versus') {
+function openGamePreview(gameId?: 'quiz' | 'versus') {
   if (gameId === 'quiz' || gameId === 'versus') {
     previewGameId.value = gameId;
   }
-  showObsFloatingWindow.value = !showObsFloatingWindow.value;
+  showGamePreview.value = true;
 }
 </script>
 
 <style lang="scss">
 :root {
-  --ink: #1e293b;
+  --ink: #111827;
   --muted: #64748b;
   --faint: #94a3b8;
-  --line: rgba(226, 232, 240, 0.9);
+  --line: #e5e7eb;
   --panel: #ffffff;
-  --panel-2: #f1f5f9;
-  --accent: #10b981;
-  --accent-2: #8b5cf6;
-  --bg: #f4f6fb;
+  --panel-2: #f8fafc;
+  --accent: #2563eb;
+  --accent-2: #7c3aed;
+  --bg: #f5f7fa;
 }
 
 .desktop-app-shell {
@@ -328,11 +324,11 @@ function toggleObsWindow(gameId?: 'quiz' | 'versus') {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  background: var(--bg-app);
   overflow: hidden;
 }
 
-.obs-standalone-shell {
+.game-display-shell {
   width: 100vw;
   height: 100vh;
   background: #000000;
@@ -349,20 +345,72 @@ function toggleObsWindow(gameId?: 'quiz' | 'versus') {
 /* 左侧专业桌面软件侧边栏 */
 .desktop-sidebar {
   width: var(--sidebar-width);
-  background: #ffffff;
+  background: var(--bg-sidebar);
   border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 12px 10px;
+  padding: 14px 10px;
   flex-shrink: 0;
   user-select: none;
+  transition: width 0.18s ease, padding 0.18s ease;
+}
+
+/* Keep the shell calm and neutral; color belongs to actions and status only. */
+.desktop-sidebar {
+  background: #f8fafc;
+  border-right-color: #e2e8f0;
+}
+
+.nav-item {
+  color: #64748b;
+}
+
+.nav-item:hover {
+  background: #eef2f7;
+  color: #0f172a;
+}
+
+.nav-item.active {
+  background: #e8f0ff;
+  color: #1d4ed8;
+  box-shadow: inset 3px 0 0 #2563eb;
+}
+
+.nav-item.active .nav-icon-box {
+  color: #2563eb;
+}
+
+.nav-icon-box {
+  color: #94a3b8;
+}
+
+.sidebar-bottom-area {
+  border-top-color: #e2e8f0;
+}
+
+.settings-item.active {
+  background: #e8f0ff;
+  color: #1d4ed8;
+}
+
+.desktop-health-status {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.status-texts strong {
+  color: #334155;
+}
+
+.status-texts small {
+  color: #94a3b8;
 }
 
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .nav-item {
@@ -370,9 +418,10 @@ function toggleObsWindow(gameId?: 'quiz' | 'versus') {
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 8px 12px;
-  border-radius: 10px;
-  color: #475569;
+  min-height: 40px;
+  padding: 8px 11px;
+  border-radius: 6px;
+  color: #9ca3af;
   background: transparent;
   font-size: 13px;
   font-weight: 500;
@@ -381,15 +430,15 @@ function toggleObsWindow(gameId?: 'quiz' | 'versus') {
 }
 
 .nav-item:hover {
-  background: #f1f5f9;
-  color: #1e293b;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f9fafb;
 }
 
 .nav-item.active {
-  background: #10b981;
+  background: #2563eb;
   color: #ffffff;
   font-weight: 700;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  box-shadow: none;
 }
 
 .nav-icon-box {
@@ -398,7 +447,7 @@ function toggleObsWindow(gameId?: 'quiz' | 'versus') {
   border-radius: 8px;
   display: grid;
   place-items: center;
-  color: #64748b;
+  color: #9ca3af;
   transition: all 0.15s;
 }
 
@@ -409,9 +458,9 @@ function toggleObsWindow(gameId?: 'quiz' | 'versus') {
 .sidebar-bottom-area {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   padding-top: 10px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .settings-item.active {
@@ -423,10 +472,10 @@ function toggleObsWindow(gameId?: 'quiz' | 'versus') {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  background: #f8fafc;
+  padding: 9px 10px;
+  background: rgba(255, 255, 255, 0.06);
   border-radius: 8px;
-  border: 1px solid #f1f5f9;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .status-pulse-dot {
@@ -444,21 +493,28 @@ function toggleObsWindow(gameId?: 'quiz' | 'versus') {
 
 .status-texts strong {
   font-size: 11px;
-  color: var(--text-main);
+  color: #f9fafb;
 }
 
 .status-texts small {
   font-size: 10px;
-  color: var(--text-muted);
+  color: #9ca3af;
 }
 
 /* 主内容视口 */
 .desktop-content-viewport {
   flex: 1;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   position: relative;
+  overscroll-behavior-x: none;
+}
+
+.desktop-content-viewport.console-page {
+  overflow: hidden;
 }
 
 .voice-init-banner {
@@ -466,9 +522,9 @@ function toggleObsWindow(gameId?: 'quiz' | 'versus') {
   align-items: center;
   justify-content: space-between;
   padding: 10px 20px;
-  background: #fef2f2;
-  border-bottom: 1px solid #fca5a5;
-  color: #991b1b;
+  background: #fff7ed;
+  border-bottom: 1px solid #fed7aa;
+  color: #9a3412;
   font-size: 12px;
 }
 
@@ -479,5 +535,98 @@ function toggleObsWindow(gameId?: 'quiz' | 'versus') {
   border: 1px solid #fca5a5;
   color: #991b1b;
   font-size: 11px;
+}
+
+@media (max-width: 980px) {
+  .desktop-sidebar {
+    width: 176px;
+    padding-inline: 8px;
+  }
+
+  .nav-item {
+    padding-inline: 9px;
+  }
+
+  .desktop-content-viewport {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .desktop-sidebar {
+    width: 64px;
+    padding-inline: 6px;
+  }
+
+  .nav-item {
+    justify-content: center;
+    padding: 7px 4px;
+  }
+
+  .nav-item > span:not(.nav-icon-box),
+  .sidebar-bottom-area .desktop-health-status,
+  .sidebar-bottom-area .nav-item > span:not(.nav-icon-box) {
+    display: none;
+  }
+
+  .nav-icon-box {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+/* Strata-inspired shell: light rail, calm surfaces, one green action color. */
+.desktop-sidebar {
+  background: #f3f4f2;
+  border-right: 1px solid #e3e5e1;
+  padding: 16px 12px;
+}
+
+.nav-item {
+  min-height: 42px;
+  border-radius: 8px;
+  color: #66716c;
+}
+
+.nav-item:hover {
+  background: #e8ece8;
+  color: #111817;
+}
+
+.nav-item.active,
+.settings-item.active {
+  background: #0b8f69;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.nav-item.active .nav-icon-box,
+.nav-item:hover .nav-icon-box {
+  color: currentColor;
+}
+
+.nav-icon-box {
+  color: #7d8983;
+}
+
+.sidebar-bottom-area {
+  border-top-color: #e3e5e1;
+}
+
+.desktop-health-status {
+  background: #ffffff;
+  border-color: #e3e5e1;
+}
+
+.status-texts strong {
+  color: #111817;
+}
+
+.status-texts small {
+  color: #7d8983;
+}
+
+.desktop-content-viewport {
+  background: #f3f4f2;
 }
 </style>

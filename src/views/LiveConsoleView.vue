@@ -14,7 +14,6 @@
       </div>
 
       <div class="studio-center-stats">
-        <span class="resolution-pill">9:16 竖屏 · 1080 × 1920 · 60 FPS</span>
         <span v-if="simulationState.active" class="timer-pill">剩余 {{ remainingLabel }}</span>
       </div>
 
@@ -41,14 +40,18 @@
         <button 
           class="action-btn-secondary" 
           type="button" 
-          title="在新窗口独立打开 9:16 直播画面"
-          @click="openExternalObs"
+          title="在新窗口独立打开 9:16 游戏画面"
+          :disabled="openingGameDisplay"
+          @click="openGameDisplay"
         >
           <ExternalLink :size="14" />
-          <span>独立窗口</span>
+          <span>{{ openingGameDisplay ? '打开中…' : '游戏画面窗口' }}</span>
         </button>
       </div>
     </header>
+    <p v-if="gameDisplayError" class="game-display-error" role="alert">
+      {{ gameDisplayError }}
+    </p>
 
     <!-- 模拟直播配置弹窗 -->
     <AppModal 
@@ -78,6 +81,14 @@
 
       <div class="modal-form-grid">
         <div class="form-field">
+          <label>演练模式</label>
+          <select v-model="selectedSimulationMode">
+            <option value="demo">演示模式 · 一键播放</option>
+            <option value="rehearsal">彩排模式 · 可暂停</option>
+            <option value="qa">验收模式 · 单步推进</option>
+          </select>
+        </div>
+        <div class="form-field">
           <label>模拟时长（分钟）</label>
           <input v-model.number="simulationDraft.durationMinutes" type="number" min="1" max="180" />
         </div>
@@ -90,6 +101,14 @@
           <input v-model.number="simulationDraft.eventIntervalSeconds" type="number" min="1" max="60" />
         </div>
       </div>
+
+      <p class="mode-hint">
+        {{ selectedSimulationMode === 'qa'
+          ? '验收模式不会自动推进，使用单步执行每个脚本事件。'
+          : selectedSimulationMode === 'rehearsal'
+            ? '彩排模式按时间轴推进，可随时暂停、继续或跳过。'
+            : '演示模式会自动播放预置脚本，适合快速展示完整流程。' }}
+      </p>
 
       <p v-if="configError" class="modal-error-msg" role="alert">{{ configError }}</p>
 
@@ -105,6 +124,29 @@
         </button>
       </template>
     </AppModal>
+
+    <section v-if="simulationState.active" class="simulation-transport" aria-label="模拟直播控制">
+      <div class="transport-status">
+        <span class="transport-dot" :class="simulationState.status"></span>
+        <strong>{{ simulationState.mode === 'qa' ? '验收模式' : simulationState.mode === 'rehearsal' ? '彩排模式' : '演示模式' }}</strong>
+        <span class="transport-muted">{{ simulationState.status === 'paused' ? '已暂停' : simulationState.status === 'running' ? '播放中' : simulationState.status === 'ready' ? '待开始' : simulationState.status }}</span>
+        <span class="transport-progress">{{ simulationState.cursor }} / {{ simulationState.timeline.length }} 个事件</span>
+      </div>
+      <div class="transport-actions">
+        <button v-if="simulationState.status !== 'running'" class="transport-btn primary" type="button" @click="toggleSimulationPause">
+          <Play :size="13" /><span>{{ simulationState.status === 'ready' ? '开始' : '继续' }}</span>
+        </button>
+        <button v-else class="transport-btn" type="button" @click="pauseLiveSimulation">
+          <Pause :size="13" /><span>暂停</span>
+        </button>
+        <button class="transport-btn" type="button" :disabled="simulationState.mode !== 'qa' && simulationState.status !== 'paused'" @click="stepLiveSimulation">
+          <SkipForward :size="13" /><span>单步</span>
+        </button>
+        <button class="transport-btn danger" type="button" @click="stopLiveSimulation()">
+          结束演练
+        </button>
+      </div>
+    </section>
 
     <!-- 演播室三大核心工作区：左侧控制板 | 中间核心直播预览 | 右侧实时弹幕流 -->
     <div class="studio-workbench-layout">
@@ -141,131 +183,118 @@
         <div class="dock-section stream-info-section">
           <div class="dock-title-row">
             <ShieldCheck :size="14" class="title-icon" />
-            <span class="dock-title">伴侣推流状态</span>
+            <span class="dock-title">直播连接</span>
           </div>
           <div class="stream-status-box">
             <div class="status-indicator-row">
               <span class="status-ping-dot" :class="{ live: liveState.connection === 'live' || simulationState.active }"></span>
-              <strong>{{ liveState.connection === 'live' ? '直播推流中 (Online)' : simulationState.active ? '模拟演练推流中' : '伴侣待机中 (Ready)' }}</strong>
+              <strong>{{ simulationState.active ? '模拟中' : liveState.connectionLabel }}</strong>
             </div>
             <div class="stream-meta-line">
               <span>房间 ID：</span>
               <b>{{ liveState.roomId || '未配置' }}</b>
             </div>
             <div class="stream-meta-line">
-              <span>渲染画质：</span>
-              <b>1080 × 1920 (9:16)</b>
-            </div>
-            <div class="stream-meta-line">
-              <span>语音引擎：</span>
-              <b>本地 TTS 正常</b>
-            </div>
-            <div class="stream-meta-line">
               <span>互动模块：</span>
-              <b :style="{ color: activeGameModule ? '#10b981' : '#64748b' }">
+              <b :style="{ color: activeGameModule ? '#0b8f69' : '#64748b' }">
                 {{ activeGameModule ? `运行中 · ${activeGameModule.name}` : '未启动 (待机)' }}
               </b>
             </div>
           </div>
 
+          <div v-if="simulationState.active" class="timeline-box">
+            <div class="timeline-heading">
+              <span>脚本时间线</span>
+              <small>{{ simulationState.timeline.filter(item => item.executed).length }} 已执行</small>
+            </div>
+            <div class="timeline-list">
+              <div
+                v-for="(item, index) in visibleTimeline"
+                :key="item.id"
+                class="timeline-item"
+                :class="{ executed: item.executed, current: index === simulationState.cursor }"
+              >
+                <span class="timeline-index">{{ index + 1 }}</span>
+                <span class="timeline-label">{{ item.label || item.type }}</span>
+                <small>{{ item.atSeconds }}s</small>
+              </div>
+            </div>
+          </div>
+
           <div class="dock-quick-actions">
-            <button
-              v-if="activeGameModule"
-              class="dock-action-btn danger"
-              type="button"
-              @click="stopAllRunningGames"
-            >
-              <span>结束当前游戏</span>
-            </button>
-            <button
-              v-else
-              class="dock-action-btn primary"
-              type="button"
-              @click="emit('navigate', 'games')"
-            >
-              <Gamepad2 :size="14" />
-              <span>进入游戏大厅</span>
-            </button>
             <button
               class="dock-action-btn secondary"
               type="button"
               @click="emit('navigate', 'connect')"
             >
               <Radio :size="14" />
-              <span>直播连接设置</span>
+              <span>连接设置</span>
             </button>
           </div>
         </div>
       </aside>
 
-      <!-- ================= 2. 中间舞台：核心 9:16 直播竖屏主监视器 (CENTER STAGE) ================= -->
-      <main class="studio-center-stage">
-        <div class="monitor-card">
-          <!-- 核心直播预览视口：统一采用 1080×1920 标准画布等比缩放，保证任何窗口尺寸下排版 100% 稳定不折行 -->
-          <div ref="previewFrame" class="monitor-live-viewport">
-            <div class="broadcast-viewport-fill">
-              <div class="monitor-canvas-scaled" :style="canvasCoverStyle">
-                <!-- 仅当某个独立游戏模块真正启动运行时，才挂载渲染该游戏的 9:16 直播画面 -->
-                <component :is="activeGameModule.component" v-if="activeGameModule" />
-
-                <!-- 未启动任何游戏时：展示标准 1080×1920 抖音直播间待机画面 -->
-                <div v-else class="douyin-live-standby-view">
-                  <div class="standby-top-bar">
-                    <div class="host-pill">
-                      <span class="host-avatar">{{ (liveState.liveInfo?.nickname || '播')[0] }}</span>
-                      <div class="host-text">
-                        <strong>{{ liveState.liveInfo?.nickname || '直播主控台' }}</strong>
-                        <small>{{ format(liveState.likes) }} 本场点赞</small>
-                      </div>
-                    </div>
-                    <div class="audience-badge">
-                      <span>👁 {{ format(liveState.audience) }} 在线</span>
-                    </div>
-                  </div>
-
-                  <div class="standby-center-visual">
-                    <div class="camera-standby-ring">
-                      <Gamepad2 :size="76" class="standby-icon" />
-                    </div>
-                    <span class="standby-signal-pill">9:16 竖屏信号待机 · 1080 × 1920</span>
-                    <h3>暂未启动互动游戏</h3>
-                    <p class="standby-desc">
-                      每个互动游戏均为独立模块。<br />
-                      请前往「游戏大厅」启动指定游戏，或开启模拟直播演示。
-                    </p>
-                    <div class="standby-quick-buttons">
-                      <button
-                        class="standby-btn primary"
-                        type="button"
-                        @click="emit('navigate', 'games')"
-                      >
-                        <Gamepad2 :size="32" />
-                        <span>前往游戏大厅启动</span>
-                      </button>
-                      <button
-                        v-if="canStartSimulation"
-                        class="standby-btn secondary"
-                        type="button"
-                        @click="openSimulationSetup"
-                      >
-                        <Sparkles :size="32" />
-                        <span>开启模拟直播演示</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="standby-bottom-bar">
-                    <div class="fake-chat-input">说点什么...</div>
-                    <div class="fake-action-icons">
-                      <span class="fake-icon">🎁</span>
-                      <span class="fake-icon">❤️</span>
-                    </div>
-                  </div>
-                </div>
+      <!-- ================= 2. 主控工作区：用明确状态和动作替代大面积直播预览 ================= -->
+      <main class="studio-control-stage">
+        <section class="control-action-panel">
+          <div class="panel-heading">
+            <h3>游戏控制</h3>
+            <span class="status-label" :class="{ good: !!activeGameModule }">{{ activeGameModule ? '运行中' : '待机' }}</span>
+          </div>
+          <div class="game-control-list">
+            <div v-for="game in registeredGames" :key="game.id" class="game-control-row">
+              <Gamepad2 :size="18" class="title-icon" />
+              <div class="game-control-name">
+                <strong>{{ game.name }}</strong>
+                <small>{{ game.badge }} · {{ game.isRunning() ? '运行中' : '未启动' }}</small>
               </div>
+              <button class="text-action" type="button" @click="emit('navigate', game.id)">配置 <ArrowRight :size="14" /></button>
             </div>
           </div>
-        </div>
+          <div v-if="activeGameModule" class="current-game-line">
+            <strong>{{ activeGameModule.name }}</strong>
+            <span>{{ activeGameModule.getStatusText() }}</span>
+          </div>
+          <div class="game-control-footer">
+            <button class="dock-action-btn primary" type="button" @click="emit('navigate', 'games')"><Gamepad2 :size="14" />游戏大厅</button>
+            <button v-if="activeGameModule" class="dock-action-btn danger" type="button" @click="stopAllRunningGames"><CircleStop :size="14" />结束游戏</button>
+          </div>
+        </section>
+
+        <section class="console-tools-section">
+          <div class="panel-heading"><h3>常用操作</h3></div>
+          <div class="console-tools-grid">
+            <button type="button" :disabled="openingGameDisplay" @click="openGameDisplay">
+              <ExternalLink :size="17" aria-hidden="true" />
+              <span>{{ openingGameDisplay ? '打开中…' : '游戏画面' }}</span>
+            </button>
+            <button type="button" @click="emit('navigate', 'connect')">
+              <Radio :size="17" aria-hidden="true" /><span>连接设置</span>
+            </button>
+            <button type="button" @click="emit('navigate', 'bgm')">
+              <Music :size="17" aria-hidden="true" /><span>音乐音效</span>
+            </button>
+            <button type="button" @click="emit('navigate', 'voice')">
+              <Volume2 :size="17" aria-hidden="true" /><span>语音播报</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="console-session-section">
+          <div class="panel-heading">
+            <h3>本场概况</h3>
+            <span class="status-label" :class="{ good: simulationState.active || liveState.connection === 'live' }">
+              {{ simulationState.active ? '模拟中' : liveState.connectionLabel }}
+            </span>
+          </div>
+          <dl class="console-session-details">
+            <div><dt>当前游戏</dt><dd>{{ activeGameModule?.name || '未启动' }}</dd></div>
+            <div><dt>互动记录</dt><dd>{{ liveState.activityFeed.length }} 条</dd></div>
+            <div><dt>运行模式</dt><dd>{{ simulationState.active ? '模拟演练' : '真实直播' }}</dd></div>
+            <div v-if="simulationState.active"><dt>脚本进度</dt><dd>{{ simulationState.cursor }} / {{ simulationState.timeline.length }}</dd></div>
+          </dl>
+          <div class="console-output-summary"><ExternalLink :size="13" aria-hidden="true" /><span>游戏画面</span><strong>1080 × 1920 · 9:16</strong></div>
+        </section>
       </main>
 
       <!-- ================= 3. 右侧面板：实时弹幕互动流 ================= -->
@@ -276,6 +305,43 @@
             <span class="dock-title">实时弹幕互动</span>
           </div>
           <span class="feed-count-badge">{{ filteredFeed.length }} 条</span>
+        </div>
+
+        <div v-if="simulationState.active" class="right-interaction-panel">
+          <div class="right-panel-heading">
+            <div>
+              <strong>人工互动</strong>
+            </div>
+            <span class="right-panel-badge">{{ simulationState.queue.length }} 待发</span>
+          </div>
+          <div class="manual-type-switch">
+            <button type="button" :class="{ active: manualDraft.type === 'chat' }" @click="manualDraft.type = 'chat'"><MessageCircle :size="13" /> 评论</button>
+            <button type="button" :class="{ active: manualDraft.type === 'like' }" @click="manualDraft.type = 'like'"><Heart :size="13" /> 点赞</button>
+            <button type="button" :class="{ active: manualDraft.type === 'gift' }" @click="manualDraft.type = 'gift'"><Gift :size="13" /> 礼物</button>
+          </div>
+          <div class="manual-form-grid">
+            <input v-model.trim="manualDraft.actorName" placeholder="观众昵称" />
+            <input v-if="manualDraft.type === 'chat'" v-model.trim="manualDraft.text" placeholder="评论内容，例如 A" />
+            <input v-else v-model.number="manualDraft.count" type="number" min="1" placeholder="数量" />
+            <template v-if="manualDraft.type === 'gift'">
+              <input v-model.trim="manualDraft.giftName" placeholder="礼物名称" />
+              <input v-model.number="manualDraft.price" type="number" min="1" placeholder="单价" />
+            </template>
+          </div>
+          <div class="manual-actions-row">
+            <button type="button" class="manual-send-btn" @click="sendManualInteraction">立即发送</button>
+            <button type="button" class="manual-send-btn secondary" @click="queueManualInteraction">加入队列</button>
+          </div>
+          <div v-if="simulationState.queue.length" class="right-queue-row">
+            <button type="button" @click="dispatchNextSimulationEvent">发送下一条</button>
+            <button type="button" @click="clearSimulationQueue">清空队列</button>
+          </div>
+          <div v-if="simulationState.history.length" class="right-history-strip">
+            <span>最近：{{ simulationState.history[0].payload.name }} · {{ simulationState.history[0].label }}</span>
+            <b :class="simulationState.history[0].status">
+              {{ simulationState.history[0].status === 'claimed' ? '已消费' : simulationState.history[0].status === 'ignored' ? '已忽略' : '已发送' }}
+            </b>
+          </div>
         </div>
 
         <!-- 弹幕分类过滤过滤器 -->
@@ -296,7 +362,7 @@
         <div class="feed-stream-container">
           <div v-if="filteredFeed.length" class="feed-stream-list">
             <div 
-              v-for="item in filteredFeed" 
+              v-for="item in visibleFeed"
               :key="item.id" 
               class="feed-bubble"
               :class="`kind-${item.kind}`"
@@ -331,12 +397,38 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { 
-  Radio, MessageSquare, Sparkles, ExternalLink, ShieldCheck, Gamepad2 
+  Radio, MessageSquare, Sparkles, ExternalLink, ShieldCheck, Gamepad2, Play, Pause, SkipForward, MessageCircle, Gift, Heart, CircleStop, ArrowRight, Music, Volume2
 } from '@lucide/vue';
-import { liveState, simulationState, startLiveSimulation, stopLiveSimulation } from '@/stores/liveStore';
-import { canStartLiveSimulation, defaultLiveSimulationConfig, normalizeSimulationConfig, type SimulationGameId } from '@/services/liveSimulation';
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import {
+  liveState,
+  simulationState,
+  startLiveSimulation,
+  stopLiveSimulation,
+  pauseLiveSimulation,
+  resumeLiveSimulation,
+  stepLiveSimulation,
+  injectSimulationEvent,
+  queueSimulationEvent,
+  dispatchNextSimulationEvent,
+  clearSimulationQueue
+} from '@/stores/liveStore';
+import {
+  canStartLiveSimulation,
+  createManualInteractionEvent,
+  defaultLiveSimulationConfig,
+  normalizeSimulationConfig,
+  type SimulationGameId,
+  type SimulationMode
+} from '@/services/liveSimulation';
+import {
+  GAME_DISPLAY_WINDOW_LABEL,
+  getGameDisplayUrl,
+  getGameDisplayWindowOptions,
+  isTauriRuntime
+} from '@/services/gameDisplayWindow';
 import { activeGameModule, getGameModule, registeredGames, stopAllRunningGames } from '@/game/gameRegistry';
 import { loadConfig, saveConfig } from '@/services/configApi';
 import AppModal from '@/components/AppModal.vue';
@@ -346,28 +438,26 @@ const emit = defineEmits<{
   navigate: [page: string];
 }>();
 
-const previewFrame = ref<HTMLElement>();
-const viewportWidth = ref(0);
-const viewportHeight = ref(0);
-let observer: ResizeObserver | undefined;
-
-const canvasCoverStyle = computed(() => {
-  if (!viewportWidth.value || !viewportHeight.value) return {};
-  const scale = Math.min(viewportWidth.value / 1080, viewportHeight.value / 1920);
-  return {
-    transform: `translate(-50%, -50%) scale(${scale})`
-  };
-});
-
-const outputUrl = computed(() => `${location.origin}${location.pathname}?page=obs&output=1`);
+const gameDisplayUrl = computed(() => getGameDisplayUrl(location.origin, location.pathname));
 
 const showSimulationConfig = ref(false);
 const startingSimulation = ref(false);
 const simulationConfigLoaded = ref(false);
+const openingGameDisplay = ref(false);
+const gameDisplayError = ref('');
 const selectedSimulationGame = ref<SimulationGameId>('quiz');
+const selectedSimulationMode = ref<SimulationMode>('demo');
 const configError = ref('');
 const canStartSimulation = computed(() => canStartLiveSimulation(liveState.connection, simulationState.active));
 const simulationDraft = reactive({ ...defaultLiveSimulationConfig });
+const manualDraft = reactive({
+  type: 'chat' as 'chat' | 'like' | 'gift',
+  actorName: '现场观众',
+  text: 'A',
+  count: 1,
+  giftName: '小心心',
+  price: 1
+});
 
 const remainingLabel = computed(() => {
   const seconds = Math.max(0, simulationState.durationSeconds - simulationState.elapsedSeconds);
@@ -387,17 +477,10 @@ const filteredFeed = computed(() => {
   if (activeFeedFilter.value === 'all') return liveState.activityFeed;
   return liveState.activityFeed.filter(item => item.kind === activeFeedFilter.value);
 });
+const visibleFeed = computed(() => filteredFeed.value.slice(0, 8));
+const visibleTimeline = computed(() => simulationState.timeline.slice(0, 6));
 
 onMounted(async () => {
-  if (previewFrame.value) {
-    observer = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
-      viewportWidth.value = width;
-      viewportHeight.value = height;
-    });
-    observer.observe(previewFrame.value);
-  }
-
   try {
     const saved = await loadConfig();
     Object.assign(simulationDraft, normalizeSimulationConfig(saved.simulationConfig));
@@ -413,12 +496,10 @@ onMounted(async () => {
   }
 });
 
-onBeforeUnmount(() => {
-  observer?.disconnect();
-});
 
 function openSimulationSetup() {
   selectedSimulationGame.value = (registeredGames[0]?.id as SimulationGameId) || 'quiz';
+  selectedSimulationMode.value = 'demo';
   configError.value = '';
   showSimulationConfig.value = true;
 }
@@ -428,7 +509,7 @@ async function startDemo() {
   startingSimulation.value = true;
   configError.value = '';
   try {
-    const config = normalizeSimulationConfig(simulationDraft);
+    const config = normalizeSimulationConfig({ ...simulationDraft, mode: selectedSimulationMode.value });
     Object.assign(simulationDraft, config);
     const saved = await loadConfig();
     await saveConfig({ ...saved, simulationConfig: config });
@@ -443,8 +524,67 @@ async function startDemo() {
   }
 }
 
-function openExternalObs() {
-  window.open(outputUrl.value, 'douai-obs-studio', 'width=460,height=820,menubar=no,toolbar=no');
+function toggleSimulationPause() {
+  if (simulationState.status === 'paused' || simulationState.status === 'ready') resumeLiveSimulation();
+  else if (simulationState.status === 'running') pauseLiveSimulation();
+}
+
+function buildManualInteraction() {
+  const event = createManualInteractionEvent(manualDraft.type, {
+    actorName: manualDraft.actorName,
+    text: manualDraft.type === 'chat'
+      ? (manualDraft.text || (selectedSimulationGame.value === 'versus' ? '1A' : 'A'))
+      : undefined,
+    count: manualDraft.count,
+    giftName: manualDraft.giftName,
+    price: manualDraft.price
+  });
+  return event;
+}
+
+function sendManualInteraction() {
+  injectSimulationEvent(buildManualInteraction());
+}
+
+function queueManualInteraction() {
+  queueSimulationEvent(buildManualInteraction());
+}
+
+async function openGameDisplay() {
+  if (openingGameDisplay.value) return;
+  openingGameDisplay.value = true;
+  gameDisplayError.value = '';
+
+  try {
+    if (!isTauriRuntime()) {
+      const popup = window.open(gameDisplayUrl.value, 'douai-game-display', 'width=460,height=820,menubar=no,toolbar=no');
+      if (!popup) {
+        gameDisplayError.value = '浏览器阻止了新窗口，请允许弹出窗口后重试。';
+      }
+      return;
+    }
+
+    const existing = await WebviewWindow.getByLabel(GAME_DISPLAY_WINDOW_LABEL);
+    if (existing) {
+      await existing.show();
+      await existing.setFocus();
+      return;
+    }
+
+    const gameDisplayWindow = new WebviewWindow(
+      GAME_DISPLAY_WINDOW_LABEL,
+      getGameDisplayWindowOptions(gameDisplayUrl.value),
+    );
+    await gameDisplayWindow.once('tauri://error', () => {
+      gameDisplayError.value = '游戏画面窗口创建失败，请重启软件后重试。';
+    });
+  } catch (error) {
+    gameDisplayError.value = error instanceof Error
+      ? `游戏画面窗口打开失败：${error.message}`
+      : '游戏画面窗口打开失败，请重试。';
+  } finally {
+    openingGameDisplay.value = false;
+  }
 }
 
 function format(value: number) {
@@ -464,11 +604,15 @@ function formatTime(timestamp?: number) {
 .studio-console-page {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  padding: 14px 18px 20px;
-  gap: 12px;
+  width: 100%;
+  min-height: max-content;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 12px 12px;
+  gap: 8px;
   background: var(--bg-app);
   box-sizing: border-box;
+  overflow: visible;
 }
 
 /* 演播室顶栏 */
@@ -476,6 +620,8 @@ function formatTime(timestamp?: number) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-width: 0;
+  flex-wrap: nowrap;
   padding: 10px 16px;
   background: #ffffff;
   border-radius: var(--radius-md);
@@ -484,9 +630,16 @@ function formatTime(timestamp?: number) {
   flex-shrink: 0;
 }
 
+.game-display-error {
+  margin: -4px 2px 0;
+  color: #b91c1c;
+  font-size: 12px;
+}
+
 .studio-meta {
   display: flex;
   align-items: center;
+  min-width: 0;
   gap: 16px;
 }
 
@@ -511,13 +664,13 @@ function formatTime(timestamp?: number) {
 }
 
 .live-dot-indicator.live {
-  background: #ecfdf5;
-  border-color: #a7f3d0;
+  background: #e7f5ef;
+  border-color: #b8e3d0;
   color: #065f46;
 }
 .live-dot-indicator.live .pulsing-core {
-  background: #10b981;
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.7);
+  background: #0b8f69;
+  box-shadow: 0 0 8px rgba(11, 143, 105, 0.7);
 }
 
 .live-dot-indicator.simulation {
@@ -533,11 +686,15 @@ function formatTime(timestamp?: number) {
 .room-anchor-tag {
   display: flex;
   align-items: center;
+  min-width: 0;
   gap: 8px;
   font-size: 12px;
 }
 .room-anchor-tag strong {
   color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .room-anchor-tag span {
   color: var(--text-muted);
@@ -546,6 +703,9 @@ function formatTime(timestamp?: number) {
 .studio-center-stats {
   display: flex;
   align-items: center;
+  min-width: 0;
+  flex: 1;
+  justify-content: center;
   gap: 10px;
 }
 
@@ -571,6 +731,7 @@ function formatTime(timestamp?: number) {
 .studio-actions {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
   gap: 8px;
 }
 
@@ -580,14 +741,14 @@ function formatTime(timestamp?: number) {
   gap: 6px;
   padding: 6px 14px;
   border-radius: 8px;
-  background: #10b981;
+  background: #0b8f69;
   color: #ffffff;
   font-size: 12px;
   font-weight: 600;
   transition: all 0.15s;
 }
 .action-btn-primary:hover:not(:disabled) {
-  background: #059669;
+  background: #087a5a;
 }
 
 .action-btn-danger {
@@ -619,12 +780,14 @@ function formatTime(timestamp?: number) {
 /* 演播室 3 列工作台布局 (左侧控制 | 中间9:16满屏主画面 | 右侧弹幕互动) */
 .studio-workbench-layout {
   display: grid;
-  grid-template-columns: minmax(230px, 0.92fr) auto minmax(260px, 1.2fr);
-  gap: 14px;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  align-items: stretch;
+  grid-template-columns: minmax(190px, 0.82fr) minmax(220px, 0.62fr) minmax(230px, 0.98fr);
+  gap: 10px;
+  width: 100%;
+  flex: 1 0 auto;
+  min-height: 620px;
+  min-width: 0;
+  overflow: visible;
+  align-items: start;
 }
 
 /* ================= 1. 左侧面板 ================= */
@@ -633,8 +796,9 @@ function formatTime(timestamp?: number) {
   flex-direction: column;
   gap: 12px;
   min-height: 0;
-  height: 100%;
-  overflow-y: auto;
+  height: auto;
+  overflow: visible;
+  min-width: 0;
 }
 
 .dock-section {
@@ -675,12 +839,12 @@ function formatTime(timestamp?: number) {
 }
 
 .dock-action-btn.primary {
-  background: #ecfdf5;
-  color: #059669;
-  border: 1px solid #a7f3d0;
+  background: #e7f5ef;
+  color: #087a5a;
+  border: 1px solid #b8e3d0;
 }
 .dock-action-btn.primary:hover {
-  background: #10b981;
+  background: #0b8f69;
   color: #ffffff;
 }
 
@@ -711,7 +875,7 @@ function formatTime(timestamp?: number) {
 }
 
 .title-icon {
-  color: #10b981;
+  color: #0b8f69;
 }
 
 .dock-title {
@@ -774,8 +938,8 @@ function formatTime(timestamp?: number) {
   background: #94a3b8;
 }
 .status-ping-dot.live {
-  background: #10b981;
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.8);
+  background: #0b8f69;
+  box-shadow: 0 0 6px rgba(11, 143, 105, 0.8);
 }
 
 .stream-meta-line {
@@ -808,9 +972,9 @@ function formatTime(timestamp?: number) {
 }
 
 .sound-trigger-btn.green {
-  background: #ecfdf5;
+  background: #e7f5ef;
   color: #065f46;
-  border-color: #a7f3d0;
+  border-color: #b8e3d0;
 }
 .sound-trigger-btn.red {
   background: #fef2f2;
@@ -841,23 +1005,30 @@ function formatTime(timestamp?: number) {
 /* ================= 2. 中间舞台：9:16 主监视器 ================= */
 .studio-center-stage {
   display: flex;
-  justify-content: center;
-  align-items: center;
+  justify-content: stretch;
+  align-items: stretch;
+  height: auto;
+  min-height: 620px;
   height: 100%;
-  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .monitor-card {
-  background: #0f172a;
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #d9e2ee;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
   display: flex;
   flex-direction: column;
   height: 100%;
-  aspect-ratio: 9/16;
-  max-width: 100%;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  min-height: 620px;
+  max-width: none;
+  padding: 8px;
   overflow: hidden;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+  box-shadow: none;
 }
 
 .monitor-header {
@@ -924,7 +1095,7 @@ function formatTime(timestamp?: number) {
   transition: all 0.15s;
 }
 .copy-url-btn:hover {
-  background: #10b981;
+  background: #0b8f69;
   color: #ffffff;
 }
 
@@ -935,7 +1106,7 @@ function formatTime(timestamp?: number) {
   width: 100%;
   position: relative;
   overflow: hidden;
-  background: #020617;
+  background: #dbe4ee;
   display: flex;
   flex-direction: column;
 }
@@ -965,7 +1136,7 @@ function formatTime(timestamp?: number) {
   justify-content: space-between;
   padding: 64px 68px 60px;
   background:
-    radial-gradient(circle at 50% 28%, rgba(16, 185, 129, 0.16) 0%, transparent 52%),
+    radial-gradient(circle at 50% 28%, rgba(11, 143, 105, 0.16) 0%, transparent 52%),
     radial-gradient(circle at 50% 35%, #1e293b 0%, #090d16 85%);
   color: #ffffff;
   position: relative;
@@ -994,7 +1165,7 @@ function formatTime(timestamp?: number) {
   width: 84px;
   height: 84px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #10b981, #06b6d4);
+  background: linear-gradient(135deg, #0b8f69, #06b6d4);
   display: grid;
   place-items: center;
   font-size: 38px;
@@ -1048,12 +1219,12 @@ function formatTime(timestamp?: number) {
   width: 188px;
   height: 188px;
   border-radius: 50%;
-  background: rgba(16, 185, 129, 0.12);
-  border: 4px dashed #10b981;
+  background: rgba(11, 143, 105, 0.12);
+  border: 4px dashed #0b8f69;
   display: grid;
   place-items: center;
   margin-bottom: 42px;
-  box-shadow: 0 0 60px rgba(16, 185, 129, 0.22);
+  box-shadow: 0 0 60px rgba(11, 143, 105, 0.22);
   animation: pulse-ring 3s infinite;
 }
 
@@ -1063,7 +1234,7 @@ function formatTime(timestamp?: number) {
 }
 
 .standby-icon {
-  color: #10b981;
+  color: #0b8f69;
 }
 
 .standby-signal-pill {
@@ -1072,9 +1243,9 @@ function formatTime(timestamp?: number) {
   font-family: ui-monospace, monospace;
   padding: 10px 28px;
   border-radius: 999px;
-  background: rgba(16, 185, 129, 0.14);
+  background: rgba(11, 143, 105, 0.14);
   color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.35);
+  border: 1px solid rgba(11, 143, 105, 0.35);
   margin-bottom: 28px;
   letter-spacing: 0.04em;
 }
@@ -1117,10 +1288,10 @@ function formatTime(timestamp?: number) {
 }
 
 .standby-btn.primary {
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: linear-gradient(135deg, #0b8f69, #087a5a);
   color: #ffffff;
   border: none;
-  box-shadow: 0 12px 32px rgba(16, 185, 129, 0.38);
+  box-shadow: 0 12px 32px rgba(11, 143, 105, 0.38);
 }
 .standby-btn.primary:hover {
   filter: brightness(1.06);
@@ -1183,7 +1354,7 @@ function formatTime(timestamp?: number) {
 }
 
 .footer-tip strong {
-  color: #10b981;
+  color: #0b8f69;
 }
 
 /* ================= 3. 右侧面板：实时弹幕互动流 ================= */
@@ -1195,7 +1366,8 @@ function formatTime(timestamp?: number) {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
+  min-width: 0;
+  overflow: visible;
 }
 
 .feed-dock-header {
@@ -1218,9 +1390,79 @@ function formatTime(timestamp?: number) {
   font-weight: 600;
   padding: 2px 7px;
   border-radius: 10px;
-  background: #ecfdf5;
-  color: #059669;
+  background: #e7f5ef;
+  color: #087a5a;
 }
+
+.right-interaction-panel {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+.right-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.right-panel-heading strong {
+  display: block;
+  color: #1e293b;
+  font-size: 12px;
+}
+.right-panel-heading small {
+  display: block;
+  margin-top: 2px;
+  color: #94a3b8;
+  font-size: 10px;
+}
+.right-panel-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 10px;
+  font-weight: 700;
+}
+.right-interaction-panel .manual-form-grid {
+  margin-top: 6px;
+}
+.right-interaction-panel .manual-actions-row {
+  margin-top: 6px;
+}
+.right-queue-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin-top: 6px;
+}
+.right-queue-row button {
+  height: 25px;
+  border: 1px solid #fed7aa;
+  border-radius: 5px;
+  background: #fff;
+  color: #9a3412;
+  font-size: 10px;
+  font-weight: 700;
+}
+.right-history-strip {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 10px;
+}
+.right-history-strip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.right-history-strip b.claimed { color: #087a5a; }
+.right-history-strip b.ignored { color: #94a3b8; }
 
 .feed-filter-bar {
   display: flex;
@@ -1249,13 +1491,14 @@ function formatTime(timestamp?: number) {
 
 .filter-pill.active {
   background: #ffffff;
-  color: #10b981;
+  color: #0b8f69;
   font-weight: 700;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .feed-stream-container {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding: 10px;
 }
@@ -1264,6 +1507,7 @@ function formatTime(timestamp?: number) {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
 }
 
 .feed-bubble {
@@ -1431,7 +1675,7 @@ function formatTime(timestamp?: number) {
 
 .modal-form-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
   margin-bottom: 14px;
 }
@@ -1456,9 +1700,277 @@ function formatTime(timestamp?: number) {
   font-size: 13px;
   outline: none;
 }
+.form-field select {
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  font-size: 13px;
+}
 .form-field input:focus {
-  border-color: #10b981;
+  border-color: #0b8f69;
   background: #ffffff;
+}
+
+.mode-hint {
+  margin: -4px 0 8px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.simulation-transport {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius-md);
+  background: #0f172a;
+  color: #e2e8f0;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.14);
+  flex-shrink: 0;
+}
+
+.transport-status,
+.transport-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transport-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+.transport-dot.running { background: #34d399; box-shadow: 0 0 8px rgba(52, 211, 153, 0.75); }
+.transport-dot.paused { background: #fbbf24; }
+.transport-dot.ready { background: #60a5fa; }
+
+.transport-muted,
+.transport-progress {
+  color: #94a3b8;
+  font-size: 11px;
+}
+.transport-progress {
+  padding-left: 8px;
+  border-left: 1px solid rgba(148, 163, 184, 0.3);
+  font-family: ui-monospace, monospace;
+}
+
+.transport-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+  font-size: 11px;
+  font-weight: 700;
+}
+.transport-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.14); }
+.transport-btn.primary { background: #0b8f69; border-color: #0b8f69; color: #fff; }
+.transport-btn.danger { background: rgba(239, 68, 68, 0.15); border-color: rgba(248, 113, 113, 0.45); color: #fecaca; }
+.transport-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.timeline-box {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+}
+.timeline-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 700;
+}
+.timeline-heading small { color: #94a3b8; font-weight: 500; }
+.timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+}
+.timeline-item {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  padding: 5px 6px;
+  border-radius: 5px;
+  color: #64748b;
+  font-size: 11px;
+}
+.timeline-item.current { background: #eff6ff; color: #1d4ed8; }
+.timeline-item.executed { color: #087a5a; }
+.timeline-index {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  font-size: 9px;
+}
+.timeline-item.executed .timeline-index { background: #c8ebdc; }
+.timeline-item small { color: #94a3b8; font-family: ui-monospace, monospace; }
+.timeline-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.manual-event-panel {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+}
+.manual-panel-title,
+.history-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 700;
+}
+.manual-panel-title small,
+.history-heading small { color: #94a3b8; font-weight: 500; }
+.manual-type-switch {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin-top: 7px;
+}
+.manual-type-switch button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 27px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #fff;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+}
+.manual-type-switch button.active {
+  color: #047857;
+  border-color: #6ee7b7;
+  background: #e7f5ef;
+}
+.manual-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin-top: 6px;
+}
+.manual-form-grid input {
+  min-width: 0;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #fff;
+  color: #334155;
+  font-size: 11px;
+}
+.manual-actions-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin-top: 6px;
+}
+.manual-send-btn {
+  height: 28px;
+  border: 1px solid #087a5a;
+  border-radius: 5px;
+  background: #0b8f69;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.manual-send-btn.secondary {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+}
+.queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px dashed #cbd5e1;
+}
+.queue-item {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 5px;
+  align-items: center;
+  padding: 5px 6px;
+  border-radius: 5px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 10px;
+}
+.queue-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin-top: 3px;
+}
+.queue-actions button {
+  height: 25px;
+  border: 1px solid #fed7aa;
+  border-radius: 5px;
+  background: #fff;
+  color: #9a3412;
+  font-size: 10px;
+  font-weight: 700;
+}
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 10px;
+}
+.history-item {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 5px;
+  align-items: center;
+  padding: 5px 6px;
+  border-radius: 5px;
+  background: #f8fafc;
+  font-size: 10px;
+}
+.history-kind {
+  color: #64748b;
+  font-weight: 700;
+}
+.history-text {
+  overflow: hidden;
+  color: #334155;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-status {
+  color: #64748b;
+  font-weight: 700;
+}
+.history-status.claimed { color: #087a5a; }
+.history-status.ignored { color: #94a3b8; }
+
+@media (max-width: 900px) {
+  .simulation-transport { align-items: flex-start; flex-direction: column; }
+  .transport-actions { flex-wrap: wrap; }
+  .modal-form-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
 .modal-error-msg {
@@ -1470,18 +1982,779 @@ function formatTime(timestamp?: number) {
 .modal-confirm-btn {
   padding: 8px 20px;
   border-radius: 8px;
-  background: #10b981;
+  background: #0b8f69;
   color: #ffffff;
   font-size: 13px;
   font-weight: 600;
 }
 .modal-confirm-btn:hover:not(:disabled) {
-  background: #059669;
+  background: #087a5a;
 }
 
 @media (max-width: 1100px) {
   .studio-workbench-layout {
-    grid-template-columns: minmax(210px, 0.9fr) auto minmax(240px, 1.15fr);
+    grid-template-columns: minmax(180px, 0.78fr) minmax(220px, 0.9fr) minmax(220px, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .studio-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+
+  .studio-center-stats {
+    order: 3;
+    flex-basis: 100%;
+    justify-content: flex-start;
+  }
+
+  .studio-workbench-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .studio-center-stage {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .studio-left-dock {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .studio-right-dock {
+    grid-column: 2;
+    grid-row: 2;
+  }
+}
+
+@media (max-width: 640px) {
+  .studio-console-page {
+    padding: 8px;
+  }
+
+  .studio-header {
+    padding: 10px 12px;
+  }
+
+  .studio-meta,
+  .studio-actions {
+    width: 100%;
+  }
+
+  .studio-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .studio-workbench-layout {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .studio-center-stage,
+  .studio-left-dock,
+  .studio-right-dock {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .studio-center-stage {
+    order: 1;
+  }
+
+  .studio-left-dock {
+    order: 2;
+  }
+
+  .studio-right-dock {
+    order: 3;
+  }
+}
+
+/* Desktop workbench refinement */
+.studio-console-page {
+  height: 100%;
+  min-height: 0;
+  padding: 10px 12px;
+  gap: 8px;
+  background: #eef2f7;
+  overflow: hidden;
+}
+
+.studio-header {
+  min-height: 44px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.studio-meta {
+  gap: 10px;
+}
+
+.live-dot-indicator,
+.room-anchor-tag,
+.resolution-pill,
+.timer-pill,
+.action-btn-primary,
+.action-btn-secondary,
+.action-btn-danger {
+  border-radius: 6px;
+}
+
+.action-btn-primary {
+  background: #0b8f69;
+  box-shadow: none;
+}
+
+.action-btn-primary:hover {
+  background: #087a5a;
+}
+
+.studio-workbench-layout {
+  gap: 8px;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 0.9fr) minmax(0, 1.3fr);
+  align-items: stretch;
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.studio-left-dock,
+.studio-right-dock,
+.studio-control-stage {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.studio-left-dock,
+.studio-right-dock {
+  background: #ffffff;
+  border: 1px solid #dbe3ee;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.studio-left-dock {
+  grid-column: 1;
+  grid-row: 1;
+  overflow-y: auto;
+  gap: 0;
+  height: 100%;
+}
+
+.studio-control-stage {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.studio-right-dock {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.control-hero-panel,
+.control-action-panel,
+.control-info-card {
+  background: #ffffff;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+}
+
+.control-hero-panel {
+  min-height: 168px;
+  padding: 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  background:
+    linear-gradient(135deg, rgba(11, 143, 105, 0.08), transparent 52%),
+    #ffffff;
+}
+
+.section-kicker {
+  display: block;
+  color: #0b8f69;
+  font: 700 10px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
+  letter-spacing: 0.08em;
+}
+
+.control-hero-copy h2 {
+  margin: 10px 0 8px;
+  color: #0f172a;
+  font-size: 28px;
+  line-height: 1.15;
+}
+
+.control-hero-copy p {
+  max-width: 430px;
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.control-hero-status {
+  display: flex;
+  min-width: 112px;
+  padding: 10px 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.control-hero-status.active {
+  border-color: #b8e3d0;
+  background: #e7f5ef;
+  color: #087a5a;
+}
+
+.control-hero-status small {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.control-action-panel {
+  padding: 12px;
+}
+
+.panel-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel-heading h3 {
+  margin: 0;
+  color: #1e293b;
+  font-size: 13px;
+}
+
+.panel-heading.compact {
+  align-items: center;
+}
+
+.panel-heading.compact h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.panel-hint,
+.control-note {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.control-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 14px;
+}
+
+.control-action {
+  display: flex;
+  min-height: 70px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #475569;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.control-action:hover:not(:disabled) {
+  border-color: #9ccfba;
+  background: #f7fcfa;
+  transform: translateY(-1px);
+}
+
+.control-action.primary {
+  border-color: #0b8f69;
+  background: #0b8f69;
+  color: #ffffff;
+}
+
+.control-action.primary:hover:not(:disabled) {
+  border-color: #087a5a;
+  background: #087a5a;
+}
+
+.control-action.danger {
+  border-color: #fecaca;
+  background: #fff7f7;
+  color: #b91c1c;
+}
+
+.control-action span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.control-action strong {
+  font-size: 12px;
+}
+
+.control-action small {
+  color: #94a3b8;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.control-action.primary small {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.control-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.control-info-card {
+  padding: 16px;
+}
+
+.status-label {
+  padding: 4px 7px;
+  border-radius: 5px;
+  color: #64748b;
+  background: #f1f5f9;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.status-label.good {
+  color: #087a5a;
+  background: #e7f5ef;
+}
+
+.output-spec-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 11px 0;
+  border-bottom: 1px solid #eef2f7;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.output-spec-row strong {
+  color: #1e293b;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.control-note {
+  margin: 12px 0 0;
+  line-height: 1.55;
+}
+
+.connection-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 18px 0 12px;
+}
+
+.connection-summary strong {
+  color: #1e293b;
+  font-size: 15px;
+}
+
+.connection-summary span {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.text-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  color: #0b8f69;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+@media (max-width: 560px) {
+  .studio-workbench-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
+  .studio-left-dock,
+  .studio-control-stage,
+  .studio-right-dock {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .studio-control-stage {
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .studio-console-page,
+  :global(.desktop-content-viewport.console-page) {
+    height: auto;
+    overflow: visible;
+  }
+
+  .studio-right-dock {
+    min-height: 360px;
+  }
+}
+
+@media (max-width: 560px) {
+  .control-hero-panel,
+  .panel-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .control-action-grid,
+  .control-info-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.monitor-card {
+  background: #d9e2ee;
+  border: 1px solid #cbd5e1;
+  padding: 8px;
+}
+
+.dock-section,
+.feed-dock-header,
+.feed-filter-bar {
+  background: #ffffff;
+}
+
+.dock-section {
+  padding: 12px;
+}
+
+.dock-title {
+  font-size: 12px;
+}
+
+.mini-metric {
+  padding: 9px 8px;
+  border-radius: 6px;
+}
+
+.stream-status-box {
+  border-radius: 6px;
+}
+
+.monitor-live-viewport {
+  background: #cbd5e1;
+  border-radius: 6px;
+}
+
+.standby-center-visual h3 {
+  font-size: 48px;
+}
+
+.standby-btn {
+  border-radius: 8px;
+}
+
+.standby-btn.primary {
+  background: #0b8f69;
+  box-shadow: none;
+}
+
+.standby-btn.primary:hover {
+  filter: none;
+  background: #087a5a;
+}
+
+.audience-badge,
+.host-pill {
+  border-radius: 8px;
+}
+
+.douyin-live-standby-view {
+  background:
+    radial-gradient(circle at 50% 22%, rgba(148, 163, 184, 0.22) 0%, transparent 40%),
+    linear-gradient(180deg, #e8eef5 0%, #dbe4ee 100%);
+  color: #0f172a;
+}
+
+.host-pill,
+.audience-badge,
+.fake-chat-input,
+.fake-icon {
+  background: rgba(255, 255, 255, 0.84);
+  border-color: rgba(148, 163, 184, 0.45);
+  color: #334155;
+}
+
+.host-text strong,
+.standby-center-visual h3 {
+  color: #0f172a;
+}
+
+.host-text small,
+.standby-desc {
+  color: #64748b;
+}
+
+.host-avatar {
+  background: #0b8f69;
+}
+
+.camera-standby-ring {
+  background: rgba(11, 143, 105, 0.08);
+  border-color: #0b8f69;
+  box-shadow: 0 0 44px rgba(11, 143, 105, 0.14);
+}
+
+.standby-icon,
+.standby-signal-pill {
+  color: #0b8f69;
+}
+
+.standby-signal-pill {
+  background: #e7f5ef;
+  border-color: #b8e3d0;
+}
+
+.standby-btn.secondary {
+  background: rgba(255, 255, 255, 0.74);
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+.standby-bottom-bar {
+  color: #64748b;
+}
+
+.fake-icon {
+  display: grid;
+  place-items: center;
+}
+
+.feed-bubble,
+.filter-pill {
+  border-radius: 6px;
+}
+
+.studio-left-dock .dock-section {
+  border: 0;
+  border-bottom: 1px solid #e5e7eb;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 12px;
+}
+
+.studio-left-dock .stream-info-section {
+  flex: 0 0 auto;
+}
+
+.studio-left-dock .dock-quick-actions {
+  display: flex;
+  margin-top: 0;
+}
+
+.studio-left-dock .stream-status-box {
+  background: transparent;
+  padding: 0;
+  border: 0;
+}
+
+.game-control-list {
+  margin-top: 12px;
+}
+
+.studio-control-stage {
+  background: #ffffff;
+  border: 1px solid #dbe3ee;
+  gap: 0;
+}
+
+.studio-control-stage .control-action-panel {
+  border: 0;
+  border-radius: 0;
+  padding: 16px;
+}
+
+.console-tools-section,
+.console-session-section {
+  padding: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.console-tools-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.console-tools-grid button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px;
+  border: 1px solid #dbe3ee;
+  border-radius: 6px;
+  background: #f8faf9;
+  color: #334155;
+  font-size: 12px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.console-tools-grid button:hover:not(:disabled) {
+  background: #e7f5ef;
+  border-color: #9ccfba;
+}
+
+.console-tools-grid button:disabled {
+  opacity: 0.5;
+}
+
+.console-session-details {
+  margin: 12px 0;
+}
+
+.console-session-details div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.console-session-details dt {
+  color: #64748b;
+}
+
+.console-session-details dd {
+  margin: 0;
+  color: #334155;
+  font-weight: 600;
+}
+
+.console-output-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid #edf0ee;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.console-output-summary strong {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.game-control-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 68px;
+  border-top: 1px solid #edf0ee;
+}
+
+.game-control-name {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.game-control-name strong {
+  color: #1f2937;
+  font-size: 13px;
+}
+
+.game-control-name small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.game-control-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #edf0ee;
+}
+
+.current-game-line {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #475569;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 561px) {
+  .studio-workbench-layout {
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 0.9fr) minmax(0, 1.3fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .studio-left-dock { grid-column: 1; grid-row: 1; }
+  .studio-control-stage { grid-column: 2; grid-row: 1; }
+  .studio-right-dock { grid-column: 3; grid-row: 1; }
+
+  .studio-header {
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .studio-center-stats {
+    flex: 1;
+    order: initial;
+    justify-content: flex-end;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .camera-standby-ring,
+  .rec-dot.active {
+    animation: none;
   }
 }
 </style>

@@ -4,6 +4,7 @@ import {
   canStartLiveSimulation,
   isSupportedSimulationGame,
   createSimulationMessage,
+  createSimulationScenario,
   normalizeSimulationConfig,
   parseLiveSimulationPacket,
   serializeLiveSimulationPacket
@@ -68,4 +69,13 @@ test('simulation sync packet parser ignores malformed or incomplete data', () =>
   assert.equal(parseLiveSimulationPacket(null), null);
   assert.equal(parseLiveSimulationPacket('{broken'), null);
   assert.equal(parseLiveSimulationPacket(JSON.stringify({ active: true })), null);
+});
+
+test('builds deterministic scenarios for each rehearsal mode', () => {
+  const qa = createSimulationScenario('quiz', normalizeSimulationConfig({ mode: 'qa' }), 'qa');
+  const demo = createSimulationScenario('quiz', normalizeSimulationConfig({ mode: 'demo' }), 'demo');
+  assert.equal(qa.mode, 'qa');
+  assert.equal(demo.mode, 'demo');
+  assert.ok(qa.events.length >= 4);
+  assert.deepEqual(qa.events.map(event => event.atSeconds), [...qa.events].map(event => event.atSeconds).sort((a, b) => a - b));
 });

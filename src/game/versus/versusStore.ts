@@ -193,9 +193,9 @@ function shuffleQuestions(list: VersusQuestion[]): VersusQuestion[] {
 const VERSUS_SYNC_STORAGE_KEY = 'douai:versus-live-state-v1';
 const VERSUS_SYNC_CHANNEL_NAME = 'douai:versus-live-sync-v1';
 
-const isObsMirrorWindow =
+const isGameDisplayWindow =
   typeof window !== 'undefined' &&
-  new URLSearchParams(window.location.search).get('page') === 'obs';
+  new URLSearchParams(window.location.search).get('display') === 'game';
 
 let syncChannel: BroadcastChannel | null = null;
 let isApplyingRemote = false;
@@ -207,7 +207,7 @@ interface VersusSyncSnapshot {
 }
 
 function publishVersusSync() {
-  if (typeof window === 'undefined' || isObsMirrorWindow || isApplyingRemote) return;
+  if (typeof window === 'undefined' || isGameDisplayWindow || isApplyingRemote) return;
   try {
     const snap: VersusSyncSnapshot = {
       state: JSON.parse(JSON.stringify(versusState)),
@@ -237,9 +237,9 @@ if (typeof window !== 'undefined') {
     if ('BroadcastChannel' in window) {
       syncChannel = new BroadcastChannel(VERSUS_SYNC_CHANNEL_NAME);
       syncChannel.addEventListener('message', (ev: MessageEvent) => {
-        if (ev.data?.type === 'SYNC_VERSUS' && isObsMirrorWindow && ev.data.payload) {
+        if (ev.data?.type === 'SYNC_VERSUS' && isGameDisplayWindow && ev.data.payload) {
           applyVersusSync(ev.data.payload);
-        } else if (ev.data?.type === 'REQUEST_VERSUS' && !isObsMirrorWindow) {
+        } else if (ev.data?.type === 'REQUEST_VERSUS' && !isGameDisplayWindow) {
           publishVersusSync();
         }
       });
@@ -248,7 +248,7 @@ if (typeof window !== 'undefined') {
     syncChannel = null;
   }
 
-  if (isObsMirrorWindow) {
+  if (isGameDisplayWindow) {
     try {
       const raw = window.localStorage.getItem(VERSUS_SYNC_STORAGE_KEY);
       if (raw) applyVersusSync(JSON.parse(raw));
@@ -478,8 +478,9 @@ export function parsePlayerAnswer(text: string): VersusOption | null {
   return null;
 }
 
-export function handleVersusMessages(messages: DyMessage[]) {
-  if (!versusState.running || versusState.winner) return;
+export function handleVersusMessages(messages: DyMessage[]): boolean {
+  if (!versusState.running || versusState.winner) return false;
+  let claimed = false;
 
   const redCmd = (versusRuntimeSettings.redCommand || '1').trim().toLowerCase();
   const blueCmd = (versusRuntimeSettings.blueCommand || '2').trim().toLowerCase();
@@ -509,6 +510,7 @@ export function handleVersusMessages(messages: DyMessage[]) {
       }
 
       if (chosenTeam) {
+        claimed = true;
         if (!player) {
           player = {
             id: userId,
@@ -528,6 +530,7 @@ export function handleVersusMessages(messages: DyMessage[]) {
       if (versusState.phase === 'answering' && versusState.question) {
         const option = parsePlayerAnswer(text);
         if (option) {
+          claimed = true;
           // If player has no faction yet, assign based on prefix or default to balanced team
           if (!player) {
             const assignedTeam = lower.startsWith(blueCmd) ? 'blue' : (lower.startsWith(redCmd) ? 'red' : (versusState.redScore > versusState.blueScore ? 'blue' : 'red'));
@@ -582,6 +585,7 @@ export function handleVersusMessages(messages: DyMessage[]) {
         }
       }
     } else if (msg.method === CastMethod.LIKE) {
+      claimed = true;
       // Like handling: Accumulate likes and trigger elimination
       const count = parseLikeCount(msg.content);
       versusState.totalLikes += count;
@@ -606,6 +610,7 @@ export function handleVersusMessages(messages: DyMessage[]) {
         }
       }
     } else if (msg.method === CastMethod.GIFT && msg.gift) {
+      claimed = true;
       // Gift handling: direct faction score boost + auto-answer
       const userId = msg.user?.id || msg.user?.name;
       if (!userId) continue;
@@ -645,6 +650,7 @@ export function handleVersusMessages(messages: DyMessage[]) {
       checkLeadAndVictory();
     }
   }
+  return claimed;
 }
 
 // Live simulation functions for the config deck

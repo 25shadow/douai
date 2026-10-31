@@ -10,7 +10,7 @@
         <div class="header-title-box">
           <div class="tag-row">
             <span class="sub-badge">FACTION BATTLE ARENA</span>
-            <span class="version-badge">9:16 OBS 直播对决</span>
+            <span class="version-badge">9:16 游戏画面</span>
           </div>
           <h1>阵营对抗 · 配置与规则</h1>
           <p>配置红蓝双阵营答题对抗流程、抢答与入队指令、点赞排除错项与礼物暴击机制及专属 9:16 直播主题。</p>
@@ -83,13 +83,13 @@
             </button>
 
             <button 
-              class="action-btn obs-window-btn" 
+              class="action-btn preview-window-btn"
               type="button" 
               title="预览当前对抗直播主题效果"
-              @click="$emit('launch-obs')"
+              @click="$emit('open-game-preview')"
             >
               <Eye :size="14" />
-              <span>主题预览 (OBS)</span>
+              <span>主题预览</span>
             </button>
 
             <button 
@@ -107,21 +107,21 @@
             <button 
               class="action-btn launch-game-btn" 
               type="button" 
-              title="直接以当前界面的参数启动阵营对抗"
+              title="直接以当前界面的参数启动游戏"
               @click="handleLaunchVersus"
             >
               <Play :size="15" fill="currentColor" />
-              <span>启动对决 (应用当前参数)</span>
+              <span>启动游戏 (应用当前参数)</span>
             </button>
 
             <button 
-              class="action-btn obs-window-btn" 
+              class="action-btn preview-window-btn"
               type="button" 
               title="预览当前对抗直播主题效果"
-              @click="$emit('launch-obs')"
+              @click="$emit('open-game-preview')"
             >
               <Eye :size="15" />
-              <span>主题预览 (OBS)</span>
+              <span>主题预览</span>
             </button>
           </template>
         </div>
@@ -543,7 +543,7 @@ import {
 
 defineEmits<{
   (e: 'back'): void;
-  (e: 'launch-obs'): void;
+  (e: 'open-game-preview'): void;
 }>();
 
 type TabId = 'banks' | 'factions' | 'victory' | 'assist' | 'theme' | 'voice';
@@ -691,7 +691,7 @@ function handleStopVersus() {
   gap: 5px;
 }
 .status-tip.success {
-  color: #10b981;
+  color: #0b8f69;
   font-weight: 600;
 }
 
@@ -853,19 +853,19 @@ function handleStopVersus() {
   background: #ea580c;
 }
 
-.obs-window-btn {
+.preview-window-btn {
   background: #f8fafc;
   color: #334155;
   border: 1px solid #cbd5e1;
 }
-.obs-window-btn:hover {
+.preview-window-btn:hover {
   background: #f1f5f9;
 }
 
 .next-btn {
   background: #f0fdf4;
   color: #15803d;
-  border: 1px solid #bbf7d0;
+  border: 1px solid #b8e3d0;
 }
 .next-btn:hover {
   background: #dcfce7;
@@ -1485,4 +1485,10 @@ function handleStopVersus() {
   flex-direction: column;
   gap: 8px;
 }
+
+/* Strata page treatment */
+.versus-config-view { background:#f3f4f2; }
+.versus-config-view .config-card, .versus-config-view .settings-panel, .versus-config-view .preview-card { border-color:#e3e5e1; border-radius:12px; box-shadow:0 1px 2px rgba(17,24,23,.04); }
+.versus-config-view .primary-btn, .versus-config-view .save-btn { background:#0b8f69; border-color:#0b8f69; box-shadow:none; }
+.versus-config-view .primary-btn:hover, .versus-config-view .save-btn:hover { background:#087a5a; }
 </style>

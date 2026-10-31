@@ -10,10 +10,10 @@
         <div class="header-title-box">
           <div class="tag-row">
             <span class="sub-badge">INTERACTIVE GAME MODULE</span>
-            <span class="version-badge">9:16 OBS 直播采集</span>
+            <span class="version-badge">9:16 游戏画面</span>
           </div>
           <h1>知识问答 · 配置与规则</h1>
-          <p>配置答题竞技流程、互动点赞与送礼规则、AI 智能生成题库及 9:16 OBS 专属画面主题。</p>
+          <p>配置答题流程、互动规则、AI 题库生成及专属游戏画面主题。</p>
         </div>
       </div>
 
@@ -81,10 +81,10 @@
           </button>
 
           <button 
-            class="action-btn obs-window-btn" 
+            class="action-btn preview-window-btn"
             type="button" 
             title="预览当前直播主题效果"
-            @click="$emit('launch-obs')"
+            @click="$emit('open-game-preview')"
           >
             <Eye :size="14" />
             <span>主题预览</span>
@@ -115,10 +115,10 @@
           </button>
 
           <button 
-            class="action-btn obs-window-btn" 
+            class="action-btn preview-window-btn"
             type="button" 
             title="预览当前直播主题效果"
-            @click="$emit('launch-obs')"
+            @click="$emit('open-game-preview')"
           >
             <Eye :size="15" />
             <span>主题预览</span>
@@ -495,7 +495,7 @@
           <button
             type="button"
             class="theme-preview-trigger-btn"
-            @click="$emit('launch-obs')"
+            @click="$emit('open-game-preview')"
           >
             <Eye :size="14" />
             <span>主题预览</span>
@@ -584,12 +584,12 @@ import { defaultGiftRules, defaultLikeRules } from '@/game/quiz/quizRules';
 
 const emit = defineEmits<{
   back: [];
-  'launch-obs': [];
+  'open-game-preview': [];
 }>();
 
 function previewTheme(themeId: QuizThemeId) {
   config.theme = themeId;
-  emit('launch-obs');
+  emit('open-game-preview');
 }
 
 const quizActions = createQuizActions({ loadConfig, saveConfig, startQuiz, stopQuiz });
@@ -777,7 +777,7 @@ function closeGame() {
   gap: 6px;
   border: 0;
   background: none;
-  color: #10b981;
+  color: #0b8f69;
   padding: 0;
   margin-bottom: 6px;
   font-size: 13px;
@@ -800,7 +800,7 @@ function closeGame() {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: #059669;
+  color: #087a5a;
 }
 
 .version-badge {
@@ -843,7 +843,7 @@ function closeGame() {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #059669;
+  color: #087a5a;
   font-weight: 600;
 }
 .status-tip.error {
@@ -860,15 +860,15 @@ function closeGame() {
   border-radius: 8px;
   font-size: 13px;
   font-weight: 700;
-  background: #10b981;
+  background: #0b8f69;
   color: #ffffff;
   border: none;
-  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 1px 3px rgba(11, 143, 105, 0.3);
   cursor: pointer;
   transition: all 0.15s;
 }
 .primary-save-btn:hover:not(:disabled) {
-  background: #059669;
+  background: #087a5a;
   transform: translateY(-1px);
 }
 .primary-save-btn:disabled {
@@ -916,8 +916,8 @@ function closeGame() {
   background: #94a3b8;
 }
 .deck-indicator-dot.live {
-  background: #10b981;
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.8);
+  background: #0b8f69;
+  box-shadow: 0 0 6px rgba(11, 143, 105, 0.8);
 }
 
 .deck-title {
@@ -998,25 +998,25 @@ function closeGame() {
 }
 
 .launch-game-btn {
-  background: #10b981;
+  background: #0b8f69;
   color: #ffffff;
   border: none;
-  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 1px 3px rgba(11, 143, 105, 0.3);
 }
 .launch-game-btn:hover:not(:disabled) {
-  background: #059669;
+  background: #087a5a;
 }
 .launch-game-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
 
-.obs-window-btn {
+.preview-window-btn {
   background: #f8fafc;
   color: #334155;
   border: 1px solid #cbd5e1;
 }
-.obs-window-btn:hover {
+.preview-window-btn:hover {
   background: #f1f5f9;
   border-color: #94a3b8;
 }
@@ -1024,7 +1024,7 @@ function closeGame() {
 .next-btn {
   background: #f0fdf4;
   color: #15803d;
-  border: 1px solid #bbf7d0;
+  border: 1px solid #b8e3d0;
 }
 .next-btn:hover {
   background: #dcfce7;
@@ -1070,8 +1070,8 @@ function closeGame() {
   background: #f8fafc;
 }
 .tab-btn.active {
-  background: #ecfdf5;
-  color: #059669;
+  background: #e7f5ef;
+  color: #087a5a;
   font-weight: 700;
 }
 
@@ -1108,7 +1108,7 @@ function closeGame() {
 .panel-kicker {
   font-size: 11px;
   font-weight: 700;
-  color: #059669;
+  color: #087a5a;
   letter-spacing: 0.08em;
 }
 
@@ -1161,10 +1161,10 @@ function closeGame() {
   background: #f1f5f9;
 }
 .bank-item-btn.selected {
-  background: #ecfdf5;
-  color: #059669;
+  background: #e7f5ef;
+  color: #087a5a;
   font-weight: 700;
-  box-shadow: inset 3px 0 #10b981;
+  box-shadow: inset 3px 0 #0b8f69;
 }
 
 .bank-item-count {
@@ -1251,8 +1251,8 @@ function closeGame() {
   color: #475569;
 }
 .option-pill.correct {
-  background: #ecfdf5;
-  border-color: #a7f3d0;
+  background: #e7f5ef;
+  border-color: #b8e3d0;
   color: #065f46;
   font-weight: 700;
 }
@@ -1325,7 +1325,7 @@ function closeGame() {
   height: 36px;
   padding: 0 18px;
   border-radius: 6px;
-  background: #10b981;
+  background: #0b8f69;
   color: #ffffff;
   border: none;
   font-size: 13px;
@@ -1334,7 +1334,7 @@ function closeGame() {
   transition: all 0.15s;
 }
 .generate-action-btn:hover:not(:disabled) {
-  background: #059669;
+  background: #087a5a;
 }
 .generate-action-btn:disabled {
   opacity: 0.55;
@@ -1342,8 +1342,8 @@ function closeGame() {
 }
 
 .generated-preview-card {
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
+  background: #e7f5ef;
+  border: 1px solid #b8e3d0;
   border-radius: 8px;
   padding: 16px;
   display: flex;
@@ -1358,7 +1358,7 @@ function closeGame() {
   height: 32px;
   padding: 0 12px;
   border-radius: 6px;
-  background: #059669;
+  background: #087a5a;
   color: #ffffff;
   border: none;
   font-size: 12px;
@@ -1383,7 +1383,7 @@ function closeGame() {
 .ai-status-message {
   margin: 0;
   font-size: 13px;
-  color: #059669;
+  color: #087a5a;
 }
 .ai-status-message.error {
   color: #dc2626;
@@ -1555,8 +1555,8 @@ function closeGame() {
   transform: translateY(-2px);
 }
 .theme-card.selected {
-  border-color: #10b981;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+  border-color: #0b8f69;
+  box-shadow: 0 4px 12px rgba(11, 143, 105, 0.15);
 }
 
 .theme-preview-box {
@@ -1609,7 +1609,7 @@ function closeGame() {
 .mock-badge {
   padding: 2px 6px;
   border-radius: 999px;
-  background: rgba(16, 185, 129, 0.25);
+  background: rgba(11, 143, 105, 0.25);
   font-size: 10px;
 }
 .mock-question {
@@ -1649,16 +1649,16 @@ function closeGame() {
   gap: 6px;
   padding: 6px 14px;
   border-radius: 8px;
-  border: 1px solid #10b981;
-  background: #ecfdf5;
-  color: #059669;
+  border: 1px solid #0b8f69;
+  background: #e7f5ef;
+  color: #087a5a;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s;
 }
 .theme-preview-trigger-btn:hover {
-  background: #10b981;
+  background: #0b8f69;
   color: #ffffff;
 }
 
@@ -1699,14 +1699,14 @@ function closeGame() {
   transition: all 0.15s;
 }
 .card-preview-btn:hover {
-  border-color: #10b981;
-  background: #ecfdf5;
-  color: #059669;
+  border-color: #0b8f69;
+  background: #e7f5ef;
+  color: #087a5a;
 }
 .theme-check-pill {
   font-size: 11px;
   font-weight: 700;
-  color: #10b981;
+  color: #0b8f69;
 }
 
 /* 底部操作条 */
@@ -1727,4 +1727,10 @@ function closeGame() {
   font-size: 12px;
   color: var(--text-muted);
 }
+
+/* Strata page treatment */
+.quiz-config-view { background:#f3f4f2; }
+.quiz-config-view .config-card, .quiz-config-view .settings-panel, .quiz-config-view .preview-card { border-color:#e3e5e1; border-radius:12px; box-shadow:0 1px 2px rgba(17,24,23,.04); }
+.quiz-config-view .primary-btn, .quiz-config-view .save-btn { background:#0b8f69; border-color:#0b8f69; box-shadow:none; }
+.quiz-config-view .primary-btn:hover, .quiz-config-view .save-btn:hover { background:#087a5a; }
 </style>

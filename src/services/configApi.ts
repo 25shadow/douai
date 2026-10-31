@@ -1,5 +1,10 @@
 import { normalizeVoiceConfig, validateVoiceConfig, type VoiceConfig } from '../voice/voiceConfig.ts';
 import type { QuizThemeId } from '../game/quiz/quizThemes.ts';
+import type { GameInteractionOverride } from '../game/interactionTypes.ts';
+export interface GameInteractionConfig {
+  version: 1;
+  games: Record<'quiz' | 'versus', GameInteractionOverride>;
+}
 export interface ProjectConfig {
   voiceConfig?: VoiceConfig;
   roomId: string;
@@ -33,6 +38,7 @@ export interface ProjectConfig {
     customQuestions: Array<{ title: string; options: Record<'A' | 'B' | 'C' | 'D', string>; answer: 'A' | 'B' | 'C' | 'D' }>;
   };
   aiConfig: { baseUrl: string; apiKey: string; model: string };
+  gameInteractionConfig?: GameInteractionConfig;
 }
 
 const fallback: ProjectConfig = {
@@ -66,6 +72,13 @@ const fallback: ProjectConfig = {
     baseUrl: 'https://api.openai.com/v1',
     apiKey: '',
     model: 'gpt-4o-mini'
+  },
+  gameInteractionConfig: {
+    version: 1,
+    games: {
+      quiz: { chat: 'ignore', sampleRate: 0.25, allowAiHost: true, allowReadAloud: false, allowDualOutput: false, nonChat: { gift: 'game_and_global', like: 'game_and_global', member: 'game_and_global', social: 'game_and_global' } },
+      versus: { chat: 'ignore', sampleRate: 0.25, allowAiHost: true, allowReadAloud: false, allowDualOutput: false, nonChat: { gift: 'game_and_global', like: 'game_and_global', member: 'game_and_global', social: 'game_and_global' } }
+    }
   }
 };
 
@@ -135,7 +148,12 @@ export async function loadConfig(fetcher: Fetcher = fetch): Promise<ProjectConfi
     const response = await fetcher(apiUrl('/api/config'));
     if (!response.ok) throw new Error('读取请求失败');
     const data = await response.json();
-    return { ...fallback, ...data, voiceConfig: normalizeVoiceConfig(data.voiceConfig, data) };
+    return {
+      ...fallback,
+      ...data,
+      gameInteractionConfig: data.gameInteractionConfig || fallback.gameInteractionConfig,
+      voiceConfig: normalizeVoiceConfig(data.voiceConfig, data)
+    };
   } catch (error) {
     throw new Error(`SQLite 配置服务不可用：${error instanceof Error ? error.message : '未知错误'}`);
   }
@@ -173,4 +191,20 @@ export async function generateQuestionBank(input: { theme: string; count: number
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || 'AI 题库生成失败');
   return result.bank as { category?: string; results: Array<{ question: string; correct_answer: string; incorrect_answers: string[] }> };
+}
+
+export async function generateAiReply(input: {
+  prompt: string;
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  policy: VoiceConfig['aiInteraction'];
+  aiConfig: ProjectConfig['aiConfig'];
+}) {
+  const response = await fetch(apiUrl('/api/ai/reply'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...input, ...input.aiConfig })
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'AI互动回复失败');
+  return result as { reply: string };
 }

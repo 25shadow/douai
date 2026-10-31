@@ -116,13 +116,13 @@ let durationTimer: number | undefined;
 let appliedLikeRules: number[] = [];
 export const quizProgress = computed(() => `${Math.min(quizState.questionIndex + 1, config.count)} / ${questions.length || config.count}`);
 
-// ==================== 跨窗口 (主控台 <-> 独立窗口 / OBS 浏览器源) 实时状态同步 ====================
+// ==================== 跨窗口 (主控台 <-> 游戏画面窗口) 实时状态同步 ====================
 const QUIZ_SYNC_STORAGE_KEY = 'douai:quiz-live-state-v1';
 const QUIZ_SYNC_CHANNEL_NAME = 'douai:quiz-live-sync-v1';
 
-const isObsMirrorWindow =
+const isGameDisplayWindow =
   typeof window !== 'undefined' &&
-  new URLSearchParams(window.location.search).get('page') === 'obs';
+  new URLSearchParams(window.location?.search || '').get('display') === 'game';
 
 let syncChannel: BroadcastChannel | null = null;
 let isApplyingRemoteState = false;
@@ -162,7 +162,7 @@ function applySyncSnapshot(snapshot: QuizSyncSnapshot | null | undefined) {
 }
 
 function publishQuizSyncState() {
-  if (typeof window === 'undefined' || isObsMirrorWindow || isApplyingRemoteState) return;
+  if (typeof window === 'undefined' || isGameDisplayWindow || isApplyingRemoteState) return;
   try {
     const snapshot = createSyncSnapshot();
     window.localStorage.setItem(QUIZ_SYNC_STORAGE_KEY, JSON.stringify(snapshot));
@@ -179,9 +179,9 @@ if (typeof window !== 'undefined') {
       syncChannel.addEventListener('message', (event: MessageEvent) => {
         const data = event.data as { type?: string; payload?: QuizSyncSnapshot } | undefined;
         if (!data) return;
-        if (data.type === 'SYNC_STATE' && isObsMirrorWindow && data.payload) {
+        if (data.type === 'SYNC_STATE' && isGameDisplayWindow && data.payload) {
           applySyncSnapshot(data.payload);
-        } else if (data.type === 'REQUEST_STATE' && !isObsMirrorWindow) {
+        } else if (data.type === 'REQUEST_STATE' && !isGameDisplayWindow) {
           publishQuizSyncState();
         }
       });
@@ -190,7 +190,7 @@ if (typeof window !== 'undefined') {
     syncChannel = null;
   }
 
-  if (isObsMirrorWindow) {
+  if (isGameDisplayWindow) {
     try {
       const raw = window.localStorage.getItem(QUIZ_SYNC_STORAGE_KEY);
       if (raw) {
@@ -248,7 +248,13 @@ function ensurePlayer(userId: string, name?: string, avatar?: string) {
   return player;
 }
 
-function addCorrectAnswer(userId: string, name?: string, avatar?: string, scene: VoiceScene = 'answer') {
+function addCorrectAnswer(
+  userId: string,
+  name?: string,
+  avatar?: string,
+  scene: VoiceScene = 'answer',
+  announceVoice = true
+) {
   const player = ensurePlayer(userId, name, avatar);
   const isFirstBlood = !quizState.firstBlood;
   const delta = isFirstBlood ? 15 : 10 + Math.min(20, player.streak * 2);
@@ -262,7 +268,9 @@ function addCorrectAnswer(userId: string, name?: string, avatar?: string, scene:
   }
   quizState.correctCount += 1;
   quizState.status = `${player.name} 答对了`;
-  announce(`${player.name} 答对了，当前段位${getQuizRank(player.score)}`, scene);
+  if (announceVoice) {
+    announce(`${player.name} 答对了，当前段位${getQuizRank(player.score)}`, scene);
+  }
   return { delta, isFirstBlood, streak: player.streak };
 }
 
@@ -437,7 +445,8 @@ function submitAnswer(
   avatar: string | undefined,
   answer: QuizOption,
   scene: VoiceScene = 'answer',
-  forceOverride = false
+  forceOverride = false,
+  announceVoice = true
 ) {
   if (forceOverride && quizState.answers[userId]) {
     delete quizState.answers[userId];
@@ -448,7 +457,7 @@ function submitAnswer(
   player.lastOption = answer;
   if (result.correct) {
     try { soundEffects.playCorrect(); } catch { /* ignore */ }
-    const info = addCorrectAnswer(userId, name, avatar, scene);
+    const info = addCorrectAnswer(userId, name, avatar, scene, announceVoice);
     quizState.recentAnswers.unshift({
       id: `${userId}-${Date.now()}`,
       name: player.name,
@@ -528,7 +537,8 @@ function handleGift(message: DyMessage) {
   const effect = getGiftEffect(price, config.giftRules);
 
   // 1. 核心互动玩法：送任何礼物均触发神助直接答对本题！
-  submitAnswer(userId, name, avatar, quizState.question.answer, 'gift', true);
+  // 礼物答题由下面的礼物专属话术播报，避免同时再播报一条普通“答对了”。
+  submitAnswer(userId, name, avatar, quizState.question.answer, 'gift', true, false);
 
   // 2. 送礼越多赠送直接积分越多 (1抖币=10直接积分，保底20积分)
   const bonusPoints = Math.max(20, price * 10);
@@ -576,18 +586,22 @@ function handleGift(message: DyMessage) {
   }
 }
 
-export function handleQuizMessages(messages: DyMessage[]) {
-  if (!quizState.running) return;
+export function handleQuizMessages(messages: DyMessage[]): boolean {
+  if (!quizState.running) return false;
+  let claimed = false;
   for (const message of messages) {
     if (message.method === CastMethod.CHAT && quizState.phase === 'answering') {
       const answer = parseQuizAnswer(message.content, quizState.question.options);
       const userId = message.user?.id || message.user?.name;
-      if (answer && userId) submitAnswer(userId, message.user?.name, message.user?.avatar, answer);
+      if (answer && userId) claimed = submitAnswer(userId, message.user?.name, message.user?.avatar, answer) || claimed;
     } else if (message.method === CastMethod.LIKE) {
+      claimed = true;
       handleLike(message);
     } else if (message.method === CastMethod.GIFT) {
+      claimed = true;
       handleGift(message);
     }
     if (!quizState.running) break;
   }
+  return claimed;
 }

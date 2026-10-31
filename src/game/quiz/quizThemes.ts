@@ -93,7 +93,7 @@ export function publishQuizTheme(value: unknown, storage = browserStorage()) {
     } catch { /* ignore */ }
   }
 
-  // 2. 跨窗口/OBS浏览器源/弹窗即时同步 (BroadcastChannel)
+  // 2. 跨窗口游戏画面即时同步 (BroadcastChannel)
   const channel = getBroadcastChannel();
   if (channel) {
     try {

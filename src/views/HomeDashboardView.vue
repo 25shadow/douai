@@ -4,7 +4,7 @@
     <section class="hero-banner">
       <div class="hero-content">
         <div class="greeting-row">
-          <h1>{{ greetingText }}，主播 👋</h1>
+          <h1>{{ greetingText }}，主播</h1>
         </div>
         <p class="greeting-subtitle">
           今天是 {{ dateString }}，祝直播顺利、人气爆棚！
@@ -12,7 +12,7 @@
         <div class="hero-tags">
           <span class="hero-tag">
             <Gamepad2 :size="13" />
-            <span>119 款游戏畅播</span>
+            <span>互动游戏畅播</span>
           </span>
           <span class="hero-tag">
             <Radio :size="13" />
@@ -113,7 +113,7 @@
           <div class="step-num-badge">2</div>
           <div class="step-content">
             <h3>挑游戏开播</h3>
-            <p>点「进入游戏」弹出 9:16 竖屏窗口，OBS 或直播伴侣直接捕获</p>
+            <p>点「进入游戏」打开独立 9:16 游戏画面窗口</p>
           </div>
         </div>
 
@@ -214,7 +214,7 @@ import UserAvatar from '@/components/UserAvatar.vue';
 const emit = defineEmits<{
   navigate: [page: 'home' | 'connect' | 'games' | 'quiz' | 'voice' | 'bgm' | 'settings' | 'console'];
   'open-license': [];
-  'toggle-obs-window': [];
+  'open-game-preview': [];
 }>();
 
 // 实时时钟
@@ -267,8 +267,7 @@ function formatTime(timestamp?: number) {
 }
 
 function handleStep2Click() {
-  // 打开 OBS 画面窗口并启动游戏
-  emit('toggle-obs-window');
+  emit('open-game-preview');
   if (!quizState.running) {
     startQuiz();
   }
@@ -406,7 +405,7 @@ async function quickDemo() {
 .quick-card:hover {
   transform: translateY(-2px);
   box-shadow: var(--card-shadow-hover);
-  border-color: rgba(16, 185, 129, 0.3);
+  border-color: rgba(11, 143, 105, 0.3);
 }
 
 .card-icon-wrap {
@@ -424,8 +423,8 @@ async function quickDemo() {
 }
 
 .icon-games {
-  background: #ecfdf5;
-  color: #10b981;
+  background: #e7f5ef;
+  color: #0b8f69;
 }
 
 .icon-chat {
@@ -461,7 +460,7 @@ async function quickDemo() {
 }
 
 .card-value.active {
-  color: #10b981;
+  color: #0b8f69;
 }
 
 .card-action-link {
@@ -472,7 +471,7 @@ async function quickDemo() {
 }
 
 .quick-card:hover .card-action-link {
-  color: #10b981;
+  color: #0b8f69;
 }
 
 /* 开播三步走 */
@@ -501,7 +500,7 @@ async function quickDemo() {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #10b981;
+  background: #0b8f69;
 }
 
 .title-with-dot h2 {
@@ -536,8 +535,8 @@ async function quickDemo() {
 
 .step-card:hover {
   background: #ffffff;
-  border-color: #10b981;
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.12);
+  border-color: #0b8f69;
+  box-shadow: 0 4px 14px rgba(11, 143, 105, 0.12);
   transform: translateY(-2px);
 }
 
@@ -545,14 +544,14 @@ async function quickDemo() {
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: #10b981;
+  background: #0b8f69;
   color: #ffffff;
   display: grid;
   place-items: center;
   font-weight: 800;
   font-size: 14px;
   flex-shrink: 0;
-  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 2px 6px rgba(11, 143, 105, 0.3);
 }
 
 .step-content {
@@ -605,8 +604,8 @@ async function quickDemo() {
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 12px;
-  background: #ecfdf5;
-  color: #059669;
+  background: #e7f5ef;
+  color: #087a5a;
 }
 
 .simulation-switch-btn {
@@ -783,5 +782,124 @@ async function quickDemo() {
   .step-arrow {
     transform: rotate(90deg);
   }
+}
+
+/* Desktop workbench refinement */
+.home-dashboard {
+  padding: 20px 24px 32px;
+  gap: 20px;
+  max-width: 1440px;
+}
+
+.hero-banner {
+  min-height: 132px;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 22px 24px;
+  border: 1px solid #e3e5e1;
+  color: #111817;
+  box-shadow: 0 1px 2px rgba(17, 24, 23, 0.04);
+}
+
+.hero-banner::after {
+  width: 220px;
+  height: 220px;
+  top: -48%;
+  right: 4%;
+  background: radial-gradient(circle, rgba(11, 143, 105, 0.12) 0%, transparent 72%);
+}
+
+.greeting-row h1 {
+  font-size: 24px;
+  letter-spacing: 0;
+  color: #111817;
+}
+
+.hero-tags {
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.hero-tag {
+  border-radius: 5px;
+  background: #f1f5f2;
+  color: #52605a;
+  padding: 4px 8px;
+}
+
+.hero-clock {
+  align-items: flex-end;
+}
+
+.clock-time {
+  font-size: 32px;
+}
+
+.metric-cards-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.quick-card,
+.onboarding-guide-section,
+.live-feed-section {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.quick-card {
+  padding: 13px 14px;
+}
+
+.quick-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--card-shadow-hover);
+}
+
+.card-icon-wrap {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+}
+
+.card-value {
+  font-size: 14px;
+}
+
+.section-title-row {
+  margin-bottom: 12px;
+}
+
+.title-with-dot h2 {
+  font-size: 14px;
+}
+
+.guide-tip {
+  font-size: 11px;
+}
+
+.step-cards-container {
+  gap: 8px;
+}
+
+.step-card {
+  border-radius: 7px;
+  padding: 12px;
+}
+
+.step-num-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: #0b8f69;
+  box-shadow: none;
+}
+
+.feed-list-wrap {
+  max-height: 320px;
+}
+
+.feed-row {
+  border-radius: 6px;
 }
 </style>

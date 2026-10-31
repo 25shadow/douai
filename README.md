@@ -1,6 +1,6 @@
 # DouAi 直播互动工作台
 
-面向抖音直播的本地互动工具，包含直播消息控制台、答题互动、OBS 主题画面和浏览器语音播报配置。
+面向抖音直播的本地互动工具，包含直播消息控制台、答题互动、独立游戏画面与浏览器语音播报配置。
 
 ## 开发
 
@@ -15,14 +15,14 @@ pnpm dev
 
 ## Windows 桌面打包
 
-项目使用 Tauri 2 打包，应用版本为 `1.0.0`。Windows 构建需要 Rust、
+项目使用 Tauri 2 打包，应用版本为 `1.0.3`。Windows 构建需要 Rust、
 WebView2 和 NSIS。
 
 ```powershell
 pnpm run package:windows
 ```
 
-MSI 安装包会复制到项目根目录下一层的 `output/windows/DouAi_1.0.0_x64.msi`，原始构建产物位于
+MSI 安装包会复制到项目根目录下一层的 `output/windows/DouAi_1.0.3_x64.msi`，原始构建产物位于
 `src-tauri/target/release/bundle/msi/`。打包后的 Python API
 作为 sidecar 随应用启动，SQLite 配置保存在当前用户的应用数据目录中。
 
@@ -30,9 +30,9 @@ MSI 安装包会复制到项目根目录下一层的 `output/windows/DouAi_1.0.0
 
 - 查看直播间评论、点赞、礼物和观众信息，并显示可用头像
 - 配置直播连接、登录凭证和 WebSocket 消息转发
-- 运行本地直播模拟，预览控制台与 OBS 输出
+- 运行本地直播模拟，预览控制台与独立游戏画面
 - 使用答题游戏、内置题库或 AI 生成题目
-- 为答题游戏选择不同的 OBS 直播主题
+- 为答题游戏选择不同的游戏画面主题
 - 配置通用直播事件和游戏的浏览器语音播报
 - 将项目配置保存在本地 SQLite 数据库
 

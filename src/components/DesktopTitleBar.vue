@@ -21,16 +21,16 @@
     </div>
 
     <!-- 右侧功能与窗口控制按钮 -->
-    <div class="window-actions no-drag">
+    <div class="window-actions no-drag" @mousedown.stop>
       <!-- 原生窗口控制按钮 (最小化、最大化、关闭) -->
       <div class="window-controls">
-        <button class="win-btn win-min" type="button" title="最小化" @click="handleMinimize">
+        <button class="win-btn win-min" type="button" title="最小化" @mousedown.stop @click="handleMinimize">
           <Minus :size="13" />
         </button>
-        <button class="win-btn win-max" type="button" :title="isMaximized ? '还原' : '最大化'" @click="handleMaximize">
+        <button class="win-btn win-max" type="button" :title="isMaximized ? '还原' : '最大化'" @mousedown.stop @click="handleMaximize">
           <Square :size="11" />
         </button>
-        <button class="win-btn win-close" type="button" title="关闭" @click="handleClose">
+        <button class="win-btn win-close" type="button" title="关闭" @mousedown.stop @click="handleClose">
           <X :size="13" />
         </button>
       </div>
@@ -40,16 +40,12 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { Sparkles, Crown, Tv, Minus, Square, X } from '@lucide/vue';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { Sparkles, Minus, Square, X } from '@lucide/vue';
 import { liveState, simulationState } from '@/stores/liveStore';
-
-const props = defineProps<{
-  obsWindowVisible: boolean;
-}>();
 
 defineEmits<{
   'open-license': [];
-  'toggle-obs-window': [];
 }>();
 
 const isMaximized = ref(false);
@@ -69,50 +65,34 @@ const connectionLabel = computed(() => {
   return '未连接直播间';
 });
 
-// Tauri 原生窗口控制兼容
-async function getTauriWindow() {
-  try {
-    const tauri = (window as unknown as { __TAURI__?: { window?: { getCurrentWindow?: () => unknown } } }).__TAURI__;
-    if (tauri?.window?.getCurrentWindow) {
-      return tauri.window.getCurrentWindow() as {
-        minimize: () => Promise<void>;
-        toggleMaximize: () => Promise<void>;
-        close: () => Promise<void>;
-      };
-    }
-  } catch {
-    // ignore
-  }
-  return null;
-}
-
 async function handleMinimize() {
-  const win = await getTauriWindow();
-  if (win) {
-    await win.minimize();
+  try {
+    await getCurrentWindow().minimize();
+  } catch {
+    // Browser preview has no native minimize action.
   }
 }
 
 async function handleMaximize() {
-  const win = await getTauriWindow();
-  if (win) {
-    await win.toggleMaximize();
+  try {
+    await getCurrentWindow().toggleMaximize();
     isMaximized.value = !isMaximized.value;
+    return;
+  } catch {
+    // Browser preview falls back to fullscreen.
+  }
+  isMaximized.value = !isMaximized.value;
+  if (isMaximized.value) {
+    void document.documentElement.requestFullscreen?.();
   } else {
-    isMaximized.value = !isMaximized.value;
-    if (isMaximized.value) {
-      void document.documentElement.requestFullscreen?.();
-    } else {
-      void document.exitFullscreen?.();
-    }
+    void document.exitFullscreen?.();
   }
 }
 
 async function handleClose() {
-  const win = await getTauriWindow();
-  if (win) {
-    await win.close();
-  } else {
+  try {
+    await getCurrentWindow().close();
+  } catch {
     if (window.confirm('确定要退出 DouAi 自动播软件吗？')) {
       window.close();
     }
@@ -128,7 +108,7 @@ async function handleClose() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 10px 0 16px;
+  padding: 0 8px 0 14px;
   user-select: none;
   flex-shrink: 0;
   z-index: 100;
@@ -143,12 +123,12 @@ async function handleClose() {
 .brand-icon {
   width: 26px;
   height: 26px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+  border-radius: 6px;
+  background: #0b8f69;
   display: grid;
   place-items: center;
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+  box-shadow: none;
 }
 
 .brand-text {
@@ -161,7 +141,7 @@ async function handleClose() {
   font-size: 14px;
   font-weight: 700;
   color: #1e293b;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .app-edition {
@@ -185,7 +165,7 @@ async function handleClose() {
   align-items: center;
   gap: 6px;
   padding: 4px 12px;
-  border-radius: 20px;
+  border-radius: 6px;
   font-size: 12px;
   font-weight: 500;
   transition: all 0.2s ease;
@@ -205,23 +185,23 @@ async function handleClose() {
 }
 
 .room-pill.live {
-  background: #ecfdf5;
-  border-color: #a7f3d0;
+  background: #e7f5ef;
+  border-color: #b8e3d0;
   color: #065f46;
 }
 .room-pill.live .status-dot {
-  background: #10b981;
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+  background: #0b8f69;
+  box-shadow: 0 0 6px rgba(11, 143, 105, 0.6);
 }
 
 .room-pill.simulation {
-  background: #f5f3ff;
-  border-color: #ddd6fe;
-  color: #5b21b6;
+  background: #e7f5ef;
+  border-color: #b8e3d0;
+  color: #087a5a;
 }
 .room-pill.simulation .status-dot {
-  background: #8b5cf6;
-  box-shadow: 0 0 6px rgba(139, 92, 246, 0.6);
+  background: #0b8f69;
+  box-shadow: 0 0 6px rgba(11, 143, 105, 0.45);
 }
 
 .room-pill.connecting {
@@ -235,7 +215,7 @@ async function handleClose() {
 
 .vip-pill {
   background: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  border: 1px solid #b8e3d0;
   color: #15803d;
   cursor: pointer;
 }
@@ -253,32 +233,6 @@ async function handleClose() {
   gap: 12px;
 }
 
-.obs-toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  font-size: 12px;
-  font-weight: 500;
-  border-radius: 6px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #334155;
-  transition: all 0.15s ease;
-}
-
-.obs-toggle-btn:hover {
-  background: #f8fafc;
-  border-color: #94a3b8;
-}
-
-.obs-toggle-btn.active {
-  background: #ecfdf5;
-  border-color: #10b981;
-  color: #065f46;
-  font-weight: 600;
-}
-
 .window-controls {
   display: flex;
   align-items: center;
@@ -286,11 +240,11 @@ async function handleClose() {
 }
 
 .win-btn {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
-  border-radius: 6px;
+  border-radius: 4px;
   color: #64748b;
   transition: all 0.15s ease;
 }

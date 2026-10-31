@@ -405,7 +405,7 @@ async function toggleRelay() {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.1em;
-  color: #10b981;
+  color: #0b8f69;
 }
 
 .header-titles h1 {
@@ -442,13 +442,13 @@ async function toggleRelay() {
 }
 
 .connection-quick-badge.live {
-  background: #ecfdf5;
-  border-color: #a7f3d0;
+  background: #e7f5ef;
+  border-color: #b8e3d0;
   color: #065f46;
 }
 .connection-quick-badge.live .badge-dot {
-  background: #10b981;
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+  background: #0b8f69;
+  box-shadow: 0 0 6px rgba(11, 143, 105, 0.6);
 }
 
 .connection-quick-badge.connecting {
@@ -499,8 +499,8 @@ async function toggleRelay() {
 }
 
 .tab-btn.active {
-  background: #ecfdf5;
-  color: #059669;
+  background: #e7f5ef;
+  color: #087a5a;
   font-weight: 700;
 }
 
@@ -530,7 +530,7 @@ async function toggleRelay() {
 }
 
 .icon-brand {
-  color: #10b981;
+  color: #0b8f69;
 }
 
 .pane-title-wrap h2 {
@@ -581,25 +581,25 @@ async function toggleRelay() {
 }
 
 .input-with-button input:focus {
-  border-color: #10b981;
+  border-color: #0b8f69;
   background: #ffffff;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15);
+  box-shadow: 0 0 0 2px rgba(11, 143, 105, 0.15);
 }
 
 .connect-action-btn {
   padding: 0 22px;
-  background: #10b981;
+  background: #0b8f69;
   color: #ffffff;
   border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+  box-shadow: 0 2px 8px rgba(11, 143, 105, 0.25);
   white-space: nowrap;
   transition: all 0.15s;
 }
 
 .connect-action-btn:hover:not(:disabled) {
-  background: #059669;
+  background: #087a5a;
 }
 
 .connect-action-btn.disconnect {
@@ -637,7 +637,7 @@ async function toggleRelay() {
 }
 
 .status-summary-bar.live .state-dot {
-  background: #10b981;
+  background: #0b8f69;
 }
 
 .status-summary-bar.connecting .state-dot {
@@ -657,7 +657,7 @@ async function toggleRelay() {
 
 .connection-tips-box {
   background: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  border: 1px solid #b8e3d0;
   border-radius: 10px;
   padding: 14px 18px;
 }
@@ -688,12 +688,12 @@ async function toggleRelay() {
 }
 
 .session-state-bar.valid {
-  background: #ecfdf5;
-  border-color: #a7f3d0;
+  background: #e7f5ef;
+  border-color: #b8e3d0;
   color: #065f46;
 }
 .session-state-bar.valid .state-dot {
-  background: #10b981;
+  background: #0b8f69;
 }
 
 .session-nick {
@@ -714,7 +714,7 @@ async function toggleRelay() {
 }
 
 .cookie-help-accordion summary {
-  color: #10b981;
+  color: #0b8f69;
   font-weight: 600;
   cursor: pointer;
   margin-bottom: 8px;
@@ -768,7 +768,13 @@ async function toggleRelay() {
 .behavior-row input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  accent-color: #10b981;
+  accent-color: #0b8f69;
   cursor: pointer;
 }
+
+/* Strata page treatment */
+.connect-page { background:#f3f4f2; }
+.connect-page .connect-card, .connect-page .connection-panel, .connect-page .settings-card { border:1px solid #e3e5e1; border-radius:12px; box-shadow:0 1px 2px rgba(17,24,23,.04); }
+.connect-page .primary-btn, .connect-page .connect-btn { background:#0b8f69; border-color:#0b8f69; box-shadow:none; }
+.connect-page .primary-btn:hover, .connect-page .connect-btn:hover { background:#087a5a; }
 </style>

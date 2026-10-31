@@ -1,40 +1,40 @@
 @import url('./font/font.css');
 
 :root {
-  /* 现代电脑软件核心设计系统 */
-  --bg-app: #f4f6fb;
-  --bg-sidebar: #ffffff;
+  /* DouAi desktop workbench tokens */
+  --bg-app: #f3f4f2;
+  --bg-sidebar: #f3f4f2;
   --bg-card: #ffffff;
-  --bg-card-hover: #fafbff;
+  --bg-card-hover: #fbfdff;
   --bg-input: #f8fafc;
-  
-  --line: rgba(226, 232, 240, 0.9);
-  --line-strong: rgba(203, 213, 225, 0.8);
-  --card-shadow: 0 4px 20px -2px rgba(26, 38, 74, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.02);
-  --card-shadow-hover: 0 12px 32px -4px rgba(26, 38, 74, 0.09), 0 4px 12px -2px rgba(0, 0, 0, 0.03);
 
-  --text-main: #1e293b;
+  --line: #e3e5e1;
+  --line-strong: #cbd5e1;
+  --card-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 8px 24px rgba(15, 23, 42, 0.04);
+  --card-shadow-hover: 0 8px 24px rgba(15, 23, 42, 0.09);
+
+  --text-main: #111827;
   --text-muted: #64748b;
   --text-faint: #94a3b8;
 
-  /* 状态与强调色 */
-  --primary: #10b981;
-  --primary-hover: #059669;
-  --primary-light: #ecfdf5;
-  --primary-glow: rgba(16, 185, 129, 0.25);
+  --primary: #0b8f69;
+  --primary-hover: #087a5a;
+  --primary-light: #e7f5ef;
+  --primary-glow: rgba(11, 143, 105, 0.18);
 
-  --accent-purple: #8b5cf6;
-  --accent-blue: #3b82f6;
-  --accent-pink: #ec4899;
-  --accent-amber: #f59e0b;
-  --accent-red: #ef4444;
+  --accent-purple: #7c3aed;
+  --accent-blue: #2563eb;
+  --accent-pink: #db2777;
+  --accent-amber: #d97706;
+  --accent-red: #dc2626;
 
   /* 窗口尺寸常数 */
-  --titlebar-height: 44px;
-  --sidebar-width: 216px;
-  --radius-lg: 18px;
-  --radius-md: 12px;
-  --radius-sm: 8px;
+  --titlebar-height: 40px;
+  --sidebar-width: 204px;
+  --radius-lg: 12px;
+  --radius-md: 8px;
+  --radius-sm: 6px;
+  --focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.2);
 }
 
 * {
@@ -52,7 +52,7 @@ body {
   overflow: hidden;
   background: var(--bg-app);
   color: var(--text-main);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Douyin Sans', sans-serif;
+  font-family: 'Douyin Sans', 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 14px;
   user-select: none;
 }
@@ -78,6 +78,15 @@ button {
   border: none;
   outline: none;
   background: transparent;
+  touch-action: manipulation;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 /* 桌面级轻量滚动条 */
@@ -110,4 +119,76 @@ button {
 [data-tauri-drag-region] select,
 .no-drag {
   -webkit-app-region: no-drag;
+}
+
+/* Strata-inspired desktop surface language shared by every page. */
+.desktop-content-viewport {
+  background: #f3f4f2;
+}
+
+.bgm-page,
+.connect-page,
+.quiz-config-view,
+.versus-config-view,
+.voice-studio-page,
+.settings-page,
+.games-center-page,
+.studio-console-page {
+  background: #f3f4f2 !important;
+  color: #111817 !important;
+}
+
+.bgm-page > *,
+.connect-page > *,
+.quiz-config-view > *,
+.versus-config-view > *,
+.voice-studio-page > *,
+.settings-page > *,
+.games-center-page > *,
+.studio-console-page > * {
+  --surface-border: #e3e5e1;
+}
+
+.bgm-page [class*="panel"],
+.connect-page [class*="panel"],
+.quiz-config-view [class*="panel"],
+.versus-config-view [class*="panel"],
+.voice-studio-page [class*="panel"],
+.settings-page [class*="panel"] {
+  border-color: #e3e5e1 !important;
+  box-shadow: 0 1px 2px rgba(17, 24, 23, 0.04) !important;
+  border-radius: 12px !important;
+}
+
+.bgm-page button,
+.connect-page button,
+.quiz-config-view button,
+.versus-config-view button,
+.voice-studio-page button,
+.settings-page button,
+.games-center-page button,
+.studio-console-page button {
+  border-radius: 8px;
+}
+
+.bgm-page input,
+.bgm-page select,
+.connect-page input,
+.connect-page select,
+.quiz-config-view input,
+.quiz-config-view select,
+.quiz-config-view textarea,
+.versus-config-view input,
+.versus-config-view select,
+.versus-config-view textarea,
+.voice-studio-page input,
+.voice-studio-page select,
+.voice-studio-page textarea,
+.settings-page input,
+.settings-page select,
+.settings-page textarea {
+  border-color: #d9ded9 !important;
+  background: #ffffff !important;
+  color: #111817 !important;
+  border-radius: 8px !important;
 }

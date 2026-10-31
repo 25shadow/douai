@@ -186,7 +186,7 @@ defineEmits<{
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.1em;
-  color: #10b981;
+  color: #0b8f69;
 }
 
 .header-titles h2 {
@@ -221,8 +221,8 @@ defineEmits<{
 }
 .tool-icon-btn:hover {
   background: #ffffff;
-  color: #10b981;
-  border-color: #10b981;
+  color: #0b8f69;
+  border-color: #0b8f69;
 }
 
 .catalog-filter-box {
@@ -257,9 +257,9 @@ defineEmits<{
   transition: all 0.15s;
 }
 .search-input-wrap input:focus {
-  border-color: #10b981;
+  border-color: #0b8f69;
   background: #ffffff;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15);
+  box-shadow: 0 0 0 2px rgba(11, 143, 105, 0.15);
 }
 
 .clear-search-btn {
@@ -339,8 +339,8 @@ defineEmits<{
 }
 
 .voice-card-item.chosen {
-  background: #ecfdf5;
-  border-color: #10b981;
+  background: #e7f5ef;
+  border-color: #0b8f69;
 }
 
 .voice-select-area {
@@ -369,12 +369,12 @@ defineEmits<{
 }
 
 .voice-monogram.auto {
-  background: #d1fae5;
+  background: #c8ebdc;
   color: #065f46;
 }
 
 .voice-card-item.chosen .voice-monogram {
-  background: #10b981;
+  background: #0b8f69;
   color: #ffffff;
 }
 
@@ -421,7 +421,7 @@ defineEmits<{
 }
 
 .check-icon {
-  color: #10b981;
+  color: #0b8f69;
   flex-shrink: 0;
   margin-right: 4px;
 }
@@ -462,7 +462,7 @@ defineEmits<{
 
 .reload-btn {
   font-size: 12px;
-  color: #10b981;
+  color: #0b8f69;
   font-weight: 600;
 }
 
@@ -491,6 +491,6 @@ defineEmits<{
 }
 
 .engine-dot.online {
-  background: #10b981;
+  background: #0b8f69;
 }
 </style>

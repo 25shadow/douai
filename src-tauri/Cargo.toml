@@ -1,6 +1,6 @@
 [package]
 name = "douai"
-version = "1.0.0"
+version = "1.0.3"
 description = "DouAi live interaction workbench"
 authors = ["DouAi"]
 edition = "2021"
